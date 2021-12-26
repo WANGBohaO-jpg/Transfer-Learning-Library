@@ -6,6 +6,7 @@ import os
 import sys
 import time
 
+
 class TextLogger(object):
     """Writes stream output to external text file.
 
@@ -13,6 +14,7 @@ class TextLogger(object):
         filename (str): the file to write stream output
         stream: the stream to read from. Default: sys.stdout
     """
+
     def __init__(self, filename, stream=sys.stdout):
         self.terminal = stream
         self.log = open(filename, 'a')

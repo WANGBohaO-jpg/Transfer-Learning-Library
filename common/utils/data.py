@@ -32,7 +32,7 @@ def send_to_device(tensor, device):
         return type(tensor)(send_to_device(t, device) for t in tensor)
     elif isinstance(tensor, dict):
         return type(tensor)({k: send_to_device(v, device) for k, v in tensor.items()})
-    elif not hasattr(tensor, "to"):
+    elif not hasattr(tensor, "to"):  # hasattr() 函数用于判断对象是否包含对应的属性
         return tensor
     return tensor.to(device)
 

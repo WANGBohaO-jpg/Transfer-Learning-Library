@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from common.modules.classifier import Classifier as ClassifierBase
 
-
+# 领域判别损失
 class DomainAdversarialLoss(nn.Module):
     r"""Domain adversarial loss from `Adversarial Discriminative Domain Adaptation (CVPR 2017)
     <https://arxiv.org/pdf/1702.05464.pdf>`_.

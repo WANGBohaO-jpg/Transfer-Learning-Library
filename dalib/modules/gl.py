@@ -9,12 +9,12 @@ from torch.autograd import Function
 import torch
 
 
+# 重载torch.autograd.Function
 class GradientFunction(Function):
-
     @staticmethod
     def forward(ctx: Any, input: torch.Tensor, coeff: Optional[float] = 1.) -> torch.Tensor:
         ctx.coeff = coeff
-        output = input * 1.0
+        output = input * 1.0  # 正向传播的时候表现为identity
         return output
 
     @staticmethod
@@ -59,7 +59,7 @@ class WarmStartGradientLayer(nn.Module):
         self.auto_step = auto_step
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        """"""
+        # lambda的值
         coeff = np.float(
             2.0 * (self.hi - self.lo) / (1.0 + np.exp(-self.alpha * self.iter_num / self.max_iters))
             - (self.hi - self.lo) + self.lo

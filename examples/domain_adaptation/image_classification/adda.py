@@ -6,6 +6,7 @@ source and target domain, nor fix classifier head. Besides, we do not adopt asym
 of the feature extractor. We achieve promising results on digits datasets (reported by ADDA paper).
 But on other benchmarks, ADDA-grl may achieve better results.
 """
+# TODO：本代码复现内容和原文有几处不符合
 import random
 import time
 import warnings
@@ -46,14 +47,14 @@ def main(args: argparse.Namespace):
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
-        cudnn.deterministic = True
+        cudnn.deterministic = True  # 使cuDNN只使用确定性的卷积算法
         warnings.warn('You have chosen to seed training. '
                       'This will turn on the CUDNN deterministic setting, '
                       'which can slow down your training considerably! '
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    cudnn.benchmark = True
+    cudnn.benchmark = True  # 使cuDNN对多个卷积算法进行基准测试并选择最快的
 
     # Data loading code
     train_transform = utils.get_train_transform(args.train_resizing, random_horizontal_flip=not args.no_hflip,
@@ -80,19 +81,23 @@ def main(args: argparse.Namespace):
     print("=> using model '{}'".format(args.arch))
     backbone = utils.get_model(args.arch, pretrain=not args.scratch)
     pool_layer = nn.Identity() if args.no_pool else None
+    # source分类器
     classifier = ImageClassifier(backbone, num_classes, bottleneck_dim=args.bottleneck_dim,
                                  pool_layer=pool_layer, finetune=not args.scratch).to(device)
+    # 领域判别器
     domain_discri = DomainDiscriminator(in_feature=classifier.features_dim, hidden_size=1024).to(device)
 
     # define loss function
     domain_adv = DomainAdversarialLoss().to(device)
+    # TODO:看上去像梯度反转层 最大迭代次数1000是什么意思？
     gl = WarmStartGradientLayer(alpha=1., lo=0., hi=1., max_iters=1000, auto_step=True)
 
     # define optimizer and lr scheduler
     optimizer = SGD(classifier.get_parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
-                    nesterov=True)
+                    nesterov=True)  # 分类器的优化器
     optimizer_d = SGD(domain_discri.get_parameters(), args.lr_d, momentum=args.momentum, weight_decay=args.weight_decay,
-                      nesterov=True)
+                      nesterov=True)  # 领域判别器的优化器
+    # LambdaLR是用来自定义学习率调整策略的
     lr_scheduler = LambdaLR(optimizer, lambda x: args.lr * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_d = LambdaLR(optimizer_d, lambda x: args.lr_d * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
 
@@ -127,7 +132,7 @@ def main(args: argparse.Namespace):
         print("lr classifier:", lr_scheduler.get_lr())
         print("lr discriminator:", lr_scheduler_d.get_lr())
         # train for one epoch
-        train(train_source_iter, train_target_iter, classifier, domain_discri, domain_adv,  gl, optimizer,
+        train(train_source_iter, train_target_iter, classifier, domain_discri, domain_adv, gl, optimizer,
               lr_scheduler, optimizer_d, lr_scheduler_d, epoch, args)
 
         # evaluate on validation set
@@ -166,6 +171,7 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
         prefix="Epoch: [{}]".format(epoch))
 
     end = time.time()
+    # TODO：可以加一个tqdm
     for i in range(args.iters_per_epoch):
         x_s, labels_s = next(train_source_iter)
         x_t, _ = next(train_target_iter)
@@ -184,12 +190,13 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
         set_requires_grad(domain_discri, False)
         x = torch.cat((x_s, x_t), dim=0)
         y, f = model(x)
-        y_s, y_t = y.chunk(2, dim=0)
-        loss_s = F.cross_entropy(y_s, labels_s)
+        y_s, y_t = y.chunk(2, dim=0)  # 模型预测结果切分成两部分，
+        loss_s = F.cross_entropy(y_s, labels_s)  # source域数据的分类误差
 
         # adversarial training to fool the discriminator
-        d = domain_discri(gl(f))
+        d = domain_discri(gl(f))  # 梯度反转层
         d_s, d_t = d.chunk(2, dim=0)
+        # 对抗损失 TODO：feature提取器的损失没有修改
         loss_transfer = 0.5 * (domain_adv(d_s, 'target') + domain_adv(d_t, 'source'))
 
         optimizer.zero_grad()
