@@ -165,13 +165,11 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
     losses_discriminator = AverageMeter('Discriminator Loss', ':6.2f')
     cls_accs = AverageMeter('Cls Acc', ':3.1f')
     domain_accs = AverageMeter('Domain Acc', ':3.1f')
-    progress = ProgressMeter(
-        args.iters_per_epoch,
-        [batch_time, data_time, losses_s, losses_transfer, losses_discriminator, cls_accs, domain_accs],
-        prefix="Epoch: [{}]".format(epoch))
+    progress = ProgressMeter(args.iters_per_epoch,
+                             [batch_time, data_time, losses_s, losses_transfer, losses_discriminator, cls_accs,
+                              domain_accs], prefix="Epoch: [{}]".format(epoch))
 
     end = time.time()
-    # TODO：可以加一个tqdm
     for i in range(args.iters_per_epoch):
         x_s, labels_s = next(train_source_iter)
         x_t, _ = next(train_target_iter)

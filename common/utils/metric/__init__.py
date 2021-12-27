@@ -5,6 +5,7 @@ __all__ = ['keypoint_detection']
 
 def binary_accuracy(output: torch.Tensor, target: torch.Tensor) -> float:
     """Computes the accuracy for binary classification"""
+    # 传入的output是batch x 1的tensor
     with torch.no_grad():
         batch_size = target.size(0)
         pred = (output >= 0.5).float().t().view(-1)
@@ -29,7 +30,7 @@ def accuracy(output, target, topk=(1,)):
         maxk = max(topk)
         batch_size = target.size(0)
 
-        _, pred = output.topk(maxk, 1, True, True)
+        _, pred = output.topk(maxk, 1, True, True)  # topk函数返回value和indices
         pred = pred.t()
         correct = pred.eq(target[None])
 

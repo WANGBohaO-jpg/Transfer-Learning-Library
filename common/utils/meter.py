@@ -15,9 +15,10 @@ class AverageMeter(object):
         >>> # Update meter after every minibatch update
         >>> losses.update(loss_value, batch_size)
     """
+
     def __init__(self, name: str, fmt: Optional[str] = ':f'):
-        self.name = name
-        self.fmt = fmt
+        self.name = name  # 指标的名称
+        self.fmt = fmt  #
         self.reset()
 
     def reset(self):
@@ -63,6 +64,7 @@ class AverageMeterDict(object):
 
 class Meter(object):
     """Computes and stores the current value."""
+
     def __init__(self, name: str, fmt: Optional[str] = ':f'):
         self.name = name
         self.fmt = fmt
@@ -80,19 +82,24 @@ class Meter(object):
 
 
 class ProgressMeter(object):
+    """
+    num_batches代表每个epoch的iter数
+    meter代表AverageMeter的实例（指标）
+    """
+
     def __init__(self, num_batches, meters, prefix=""):
         self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
         self.meters = meters
         self.prefix = prefix
 
+    # batch代表第几个iteration
     def display(self, batch):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
+        print("wbh:", entries)
         print('\t'.join(entries))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-

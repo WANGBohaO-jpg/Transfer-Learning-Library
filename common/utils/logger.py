@@ -16,8 +16,9 @@ class TextLogger(object):
     """
 
     def __init__(self, filename, stream=sys.stdout):
+        # 这两个属性是两个stream
         self.terminal = stream
-        self.log = open(filename, 'a')
+        self.log = open(filename, 'a')  # 如果文件存在向末尾append
 
     def write(self, message):
         self.terminal.write(message)
@@ -62,7 +63,7 @@ class CompleteLogger:
         log_filename = os.path.join(self.root, "{}-{}.txt".format(phase, now))
         if os.path.exists(log_filename):
             os.remove(log_filename)
-        self.logger = TextLogger(log_filename)
+        self.logger = TextLogger(log_filename)  # 管理写入的文件流
         sys.stdout = self.logger
         sys.stderr = self.logger
         if phase != 'train':
