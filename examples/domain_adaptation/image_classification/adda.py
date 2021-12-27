@@ -41,7 +41,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def main(args: argparse.Namespace):
-    logger = CompleteLogger(args.log, args.phase)
+    logger = CompleteLogger(args.log, args.arch, args.phase)
     print(args)
 
     if args.seed is not None:
@@ -79,9 +79,9 @@ def main(args: argparse.Namespace):
 
     # create model
     print("=> using model '{}'".format(args.arch))
-    backbone = utils.get_model(args.arch, pretrain=not args.scratch)
+    backbone = utils.get_model(args.arch, pretrain=not args.scratch)  # source的feature extractor
     pool_layer = nn.Identity() if args.no_pool else None
-    # source分类器
+    # source完整的网络
     classifier = ImageClassifier(backbone, num_classes, bottleneck_dim=args.bottleneck_dim,
                                  pool_layer=pool_layer, finetune=not args.scratch).to(device)
     # 领域判别器

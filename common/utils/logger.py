@@ -47,14 +47,15 @@ class CompleteLogger:
 
     """
 
-    def __init__(self, root, phase='train'):
+    def __init__(self, root, model_name, phase='train'):
         self.root = root
+        self.model = model_name
         self.phase = phase
-        self.visualize_directory = os.path.join(self.root, "visualize")
-        self.checkpoint_directory = os.path.join(self.root, "checkpoints")
+        self.visualize_directory = os.path.join(self.root, self.model, "visualize")
+        self.checkpoint_directory = os.path.join(self.root, self.model, "checkpoints")
         self.epoch = 0
 
-        os.makedirs(self.root, exist_ok=True)
+        os.makedirs(os.path.join(self.root, self.model), exist_ok=True)
         os.makedirs(self.visualize_directory, exist_ok=True)
         os.makedirs(self.checkpoint_directory, exist_ok=True)
 

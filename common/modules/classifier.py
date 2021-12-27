@@ -76,7 +76,11 @@ class Classifier(nn.Module):
         return self._features_dim
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """"""
+        """
+        backbone，pool_layer和bottleneck之后输出feature，然后接head（分类器）输出prediction
+        :param x:
+        :return:
+        """
         f = self.pool_layer(self.backbone(x))
         f = self.bottleneck(f)
         predictions = self.head(f)
