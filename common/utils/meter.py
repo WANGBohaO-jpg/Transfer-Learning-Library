@@ -18,7 +18,7 @@ class AverageMeter(object):
 
     def __init__(self, name: str, fmt: Optional[str] = ':f'):
         self.name = name  # 指标的名称
-        self.fmt = fmt  #
+        self.fmt = fmt  # 数字格式化
         self.reset()
 
     def reset(self):
@@ -35,6 +35,7 @@ class AverageMeter(object):
             self.avg = self.sum / self.count
 
     def __str__(self):
+        # 当前值和平均值
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
@@ -96,7 +97,6 @@ class ProgressMeter(object):
     def display(self, batch):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print("wbh:", entries)
         print('\t'.join(entries))
 
     def _get_batch_fmtstr(self, num_batches):

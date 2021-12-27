@@ -158,7 +158,7 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
           domain_discri: DomainDiscriminator, domain_adv: DomainAdversarialLoss, gl,
           optimizer: SGD, lr_scheduler: LambdaLR, optimizer_d: SGD, lr_scheduler_d: LambdaLR,
           epoch: int, args: argparse.Namespace):
-    batch_time = AverageMeter('Time', ':5.2f')
+    batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')
     losses_s = AverageMeter('Cls Loss', ':6.2f')
     losses_transfer = AverageMeter('Transfer Loss', ':6.2f')
