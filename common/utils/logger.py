@@ -61,7 +61,7 @@ class CompleteLogger:
 
         # redirect std out
         now = time.strftime("%Y-%m-%d-%H_%M_%S", time.localtime(time.time()))
-        log_filename = os.path.join(self.root, "{}-{}.txt".format(phase, now))
+        log_filename = os.path.join(self.root, self.model, "{}-{}.txt".format(phase, now))
         if os.path.exists(log_filename):
             os.remove(log_filename)
         self.logger = TextLogger(log_filename)  # 管理写入的文件流
