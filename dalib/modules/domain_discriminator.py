@@ -37,7 +37,7 @@ class DomainDiscriminator(nn.Sequential):
                 linear_layer_list.append(nn.BatchNorm1d(hidden_size[i + 1]))
                 linear_layer_list.append(nn.ReLU())
             linear_layer_list.append(nn.Linear(hidden_size[-1], 1))
-            linear_layer_list.append(nn.Sigmoid)
+            linear_layer_list.append(nn.Sigmoid())
             super(DomainDiscriminator, self).__init__(*linear_layer_list)
         else:
             for i in range(layer_num - 1):
@@ -45,7 +45,7 @@ class DomainDiscriminator(nn.Sequential):
                 linear_layer_list.append(nn.ReLU(inplace=True))
                 linear_layer_list.append(nn.Dropout(0.5))
             linear_layer_list.append(nn.Linear(hidden_size[-1], 1))
-            linear_layer_list.append(nn.Sigmoid)
+            linear_layer_list.append(nn.Sigmoid())
             super(DomainDiscriminator, self).__init__(*linear_layer_list)
 
     def get_parameters(self) -> List[Dict]:
