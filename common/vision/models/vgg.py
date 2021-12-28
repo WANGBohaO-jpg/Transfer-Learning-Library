@@ -61,6 +61,7 @@ class VGG(nn.Module):
         )
         if init_weights:
             self._initialize_weights()
+        self._out_features = 512 * 7 * 7
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -69,10 +70,10 @@ class VGG(nn.Module):
         :return:
         """
         x = self.features(x)
-        # x = self.avgpool(x)
-        # x = torch.flatten(x, 1)
-        # x = self.classifier(x)
-        return x
+        x = self.avgpool(x)
+        f = torch.flatten(x, 1)
+        x = self.classifier(f)
+        return x, f
 
     def _initialize_weights(self) -> None:
         for m in self.modules():
@@ -86,6 +87,11 @@ class VGG(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, 0, 0.01)
                 nn.init.constant_(m.bias, 0)
+
+    @property  # 设置为只读属性
+    def out_features(self) -> int:
+        """The dimension of output features"""
+        return self._out_features
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:

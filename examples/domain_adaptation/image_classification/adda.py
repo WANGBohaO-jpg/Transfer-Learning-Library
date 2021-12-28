@@ -33,6 +33,7 @@ from common.utils.metric import accuracy, binary_accuracy
 from common.utils.meter import AverageMeter, ProgressMeter
 from common.utils.logger import CompleteLogger
 from common.utils.analysis import collect_feature, tsne, a_distance
+from common.vision import models
 
 sys.path.append('.')
 import utils
@@ -79,11 +80,15 @@ def main(args: argparse.Namespace):
 
     # create model
     print("=> using model '{}'".format(args.arch))
-    backbone = utils.get_model(args.arch, pretrain=not args.scratch)  # source的feature extractor
-    pool_layer = nn.Identity() if args.no_pool else None
-    # source完整的网络
-    classifier = ImageClassifier(backbone, num_classes, bottleneck_dim=args.bottleneck_dim,
-                                 pool_layer=pool_layer, finetune=not args.scratch).to(device)
+    if "resnet" in args.arch:
+        backbone = utils.get_model(args.arch, pretrain=not args.scratch)  # source的feature extractor
+        pool_layer = nn.Identity() if args.no_pool else None
+        # source完整的网络
+        classifier = ImageClassifier(backbone, num_classes, bottleneck_dim=args.bottleneck_dim,
+                                     pool_layer=pool_layer, finetune=not args.scratch).to(device)
+    elif "vgg" in args.arch:
+        model_fd = getattr(models, "vgg")
+        classifier = getattr(model_fd, args.arch)(num_classes=num_classes)
     # 领域判别器
     domain_discri = DomainDiscriminator(in_feature=classifier.features_dim, hidden_size=1024).to(device)
 
