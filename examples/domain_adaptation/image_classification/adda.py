@@ -33,7 +33,6 @@ from common.utils.metric import accuracy, binary_accuracy
 from common.utils.meter import AverageMeter, ProgressMeter
 from common.utils.logger import CompleteLogger
 from common.utils.analysis import collect_feature, tsne, a_distance
-from common.vision import models
 
 sys.path.append('.')
 import utils
@@ -87,10 +86,9 @@ def main(args: argparse.Namespace):
         classifier = ImageClassifier(backbone, num_classes, bottleneck_dim=args.bottleneck_dim,
                                      pool_layer=pool_layer, finetune=not args.scratch).to(device)
     elif "vgg" in args.arch:
-        model_fd = getattr(models, "vgg")
-        classifier = getattr(model_fd, args.arch)(num_classes=num_classes)
+        pass  # TODO:vgg网络待增加
     # 领域判别器
-    domain_discri = DomainDiscriminator(in_feature=classifier.features_dim, hidden_size=1024).to(device)
+    domain_discri = DomainDiscriminator(in_feature=classifier.features_dim, hidden_size=args.discrim_dim).to(device)
 
     # define loss function
     domain_adv = DomainAdversarialLoss().to(device)
@@ -246,6 +244,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),
                         help='dataset: ' + ' | '.join(utils.get_dataset_names()) +
                              ' (default: Office31)')
+    parser.add_argument('-discrim_dim', nargs='+', type=int, default=[1024, 2048, 3072])
     parser.add_argument('-s', '--source', help='source domain(s)', nargs='+')
     parser.add_argument('-t', '--target', help='target domain(s)', nargs='+')
     parser.add_argument('--train-resizing', type=str, default='default')

@@ -26,31 +26,27 @@ class DomainDiscriminator(nn.Sequential):
         - Outputs: :math:`(minibatch, 1)`
     """
 
-    def __init__(self, in_feature: int, hidden_size: int, batch_norm=True):
+    def __init__(self, in_feature: int, hidden_size: List, batch_norm=True):
+        hidden_size.insert(0, in_feature)
+        linear_layer_list = []
+        layer_num = len(hidden_size)
+
         if batch_norm:
-            super(DomainDiscriminator, self).__init__(
-                nn.Linear(in_feature, hidden_size),
-                nn.BatchNorm1d(hidden_size),
-                nn.ReLU(),
-                nn.Linear(hidden_size, hidden_size),
-                nn.BatchNorm1d(hidden_size),
-                nn.ReLU(),
-                nn.Linear(hidden_size, 1),
-                nn.Sigmoid()
-            )
+            for i in range(layer_num - 1):
+                linear_layer_list.append(nn.Linear(hidden_size[i], hidden_size[i + 1]))
+                linear_layer_list.append(nn.BatchNorm1d(hidden_size[i + 1]))
+                linear_layer_list.append(nn.ReLU())
+            linear_layer_list.append(nn.Linear(hidden_size[-1], 1))
+            linear_layer_list.append(nn.Sigmoid)
+            super(DomainDiscriminator, self).__init__(*linear_layer_list)
         else:
-            super(DomainDiscriminator, self).__init__(
-                nn.Linear(in_feature, hidden_size),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.5),
-                nn.Linear(hidden_size, hidden_size),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.5),
-                nn.Linear(hidden_size, 1),
-                nn.Sigmoid()
-            )
+            for i in range(layer_num - 1):
+                linear_layer_list.append(nn.Linear(hidden_size[i], hidden_size[i + 1]))
+                linear_layer_list.append(nn.ReLU(inplace=True))
+                linear_layer_list.append(nn.Dropout(0.5))
+            linear_layer_list.append(nn.Linear(hidden_size[-1], 1))
+            linear_layer_list.append(nn.Sigmoid)
+            super(DomainDiscriminator, self).__init__(*linear_layer_list)
 
     def get_parameters(self) -> List[Dict]:
         return [{"params": self.parameters(), "lr": 1.}]
-
-
