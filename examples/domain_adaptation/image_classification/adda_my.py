@@ -161,7 +161,7 @@ def main(args: argparse.Namespace):
     # 将source encoder和head在source上训练
     best_acc1 = 0.
     print("begin to train the source model on the source dataset")
-    for epoch in range(args.epoch1):
+    for epoch in range(args.epochs1):
         optimizer_list = [optimizer_s_cnn, optimizer_head]
         lr_scheduler_list = [lr_scheduler_s_cnn, lr_scheduler_head]
         print("lr source cnn:", lr_scheduler_s_cnn.get_lr())
@@ -181,7 +181,7 @@ def main(args: argparse.Namespace):
     # 改为target_CNN和source_classifier的feature提取层对抗训练
     best_acc1 = 0
     print("begin to train the target CNN and source CNN using adversarial manner")
-    for epoch in range(args.epoch2):
+    for epoch in range(args.epochs2):
         optimizer_list = [optimizer_t_cnn, optimizer_d]
         lr_scheduler_list = [lr_scheduler_t_cnn, lr_scheduler_d]
         print("lr target cnn:", lr_scheduler_t_cnn.get_lr())
