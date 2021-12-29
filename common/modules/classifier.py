@@ -50,10 +50,9 @@ class Classifier(nn.Module):
         self.backbone = backbone
         self.num_classes = num_classes
         if pool_layer is None:
-            self.pool_layer = nn.Sequential(
-                nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-                nn.Flatten()
-            )
+            # 若resnet50没有指定pool层，默认会加上一个AvgPool，之后相当于是接全连接，但作者加了一个bottleneck再连全连接
+            self.pool_layer = nn.Sequential(nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+                                            nn.Flatten())
         else:
             self.pool_layer = pool_layer
         if bottleneck is None:
@@ -81,8 +80,9 @@ class Classifier(nn.Module):
         :param x:
         :return:
         """
-        f = self.pool_layer(self.backbone(x))
-        f = self.bottleneck(f)
+        f = self.backbone(x)  # 64 x 2048 x 7 x 7
+        f = self.pool_layer(f)  # 64 x 2048
+        f = self.bottleneck(f)  # 64 x 256
         predictions = self.head(f)
         if self.training:
             return predictions, f

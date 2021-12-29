@@ -41,6 +41,8 @@ class DomainAdversarialLoss(nn.Module):
 
 class ImageClassifier(ClassifierBase):
     def __init__(self, backbone: nn.Module, num_classes: int, bottleneck_dim: Optional[int] = 256, **kwargs):
+        # resnet50没有指定pool层，默认会加上一个AvgPool，之后相当于是接全连接，但作者加了一个bottleneck再连全连接
+        # 因此bottleneck层后面直接开始接全连接降维
         bottleneck = nn.Sequential(
             # nn.AdaptiveAvgPool2d(output_size=(1, 1)),
             # nn.Flatten(),
