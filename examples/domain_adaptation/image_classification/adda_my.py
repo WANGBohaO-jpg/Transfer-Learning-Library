@@ -92,7 +92,7 @@ def main(args: argparse.Namespace):
                                           nn.Linear(source_backbone.out_features, args.bottleneck_dim),
                                           nn.BatchNorm1d(args.bottleneck_dim),
                                           nn.ReLU())
-        source_CNN = nn.Sequential(source_backbone, source_bottleneck)
+        source_CNN = nn.Sequential(source_backbone, source_bottleneck).to(device)
 
         target_backbone = utils.get_model(args.arch, pretrain=not args.scratch)
         target_CNN = nn.Sequential(target_backbone,
@@ -100,8 +100,8 @@ def main(args: argparse.Namespace):
                                    nn.Linear(target_backbone.out_features, args.bottleneck_dim),
                                    nn.BatchNorm1d(args.bottleneck_dim),
                                    nn.ReLU()
-                                   )
-        classifier_head = nn.Linear(args.bottleneck_dim, num_classes)
+                                   ).to(device)
+        classifier_head = nn.Linear(args.bottleneck_dim, num_classes).to(device)
     elif "vgg" in args.arch:
         pass  # TODO:vgg网络待增加
 
