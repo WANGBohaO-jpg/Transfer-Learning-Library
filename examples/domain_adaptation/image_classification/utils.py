@@ -143,14 +143,14 @@ def validate(val_loader, model, args, device) -> float:
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.print_freq == 0:
-                progress.display(i)
+            # if i % args.print_freq == 0:
+            #     progress.display(i)
 
         print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
         if confmat:
             print(confmat.format(args.class_names))
 
-    return top1.avg
+    return top1.avg, losses.avg
 
 
 def get_train_transform(resizing='default', random_horizontal_flip=True, random_color_jitter=False,

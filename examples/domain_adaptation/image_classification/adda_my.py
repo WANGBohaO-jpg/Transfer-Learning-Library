@@ -40,6 +40,8 @@ from common.utils.meter import AverageMeter, ProgressMeter
 from common.utils.logger import CompleteLogger
 from common.utils.analysis import collect_feature, tsne, a_distance
 
+from tensorboardX import SummaryWriter
+
 sys.path.append('.')
 import utils
 
@@ -71,6 +73,7 @@ class feature_CNN(nn.Module):
 
 def main(args: argparse.Namespace):
     logger = CompleteLogger(args.log, args.arch, args.phase)
+    writer = SummaryWriter(log_dir=logger.tensorboard_directory)
     print(args)
 
     if args.seed is not None:
@@ -134,13 +137,13 @@ def main(args: argparse.Namespace):
                       nesterov=True)  # 领域判别器的优化器
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
-    # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子 TODO:学习率有问题！
+
+    # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子
     lr_scheduler_head = LambdaLR(optimizer_head, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_s_cnn = LambdaLR(optimizer_s_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_t_cnn = LambdaLR(optimizer_t_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    lr_scheduler_d = LambdaLR(optimizer_d, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    print("optimizer's0 lr: ", optimizer_s_cnn.state_dict()['param_groups'][0]['lr'])
-    print("optimizer's1 lr: ", optimizer_s_cnn.state_dict()['param_groups'][1]['lr'])
+    lr_scheduler_d = LambdaLR(optimizer_d, lambda x: args.lr_d * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+
     # resume from the best checkpoint
     if args.phase != 'train':
         checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_best'), map_location='cpu')
@@ -176,15 +179,16 @@ def main(args: argparse.Namespace):
     for epoch in range(args.epochs1):
         optimizer_list = [optimizer_s_cnn, optimizer_head]
         lr_scheduler_list = [lr_scheduler_s_cnn, lr_scheduler_head]
-        print("lr source cnn:", lr_scheduler_s_cnn.get_lr())
-        # 打印当前学习率
-        print("optimizer's lr: ", optimizer_s_cnn.state_dict()['param_groups'][0]['lr'])
-
-        print("lr classifier head:", lr_scheduler_head.get_lr())
-        train_source(source_CNN, classifier_head, train_source_iter, optimizer_list, lr_scheduler_list, epoch, args)
+        print("lr source cnn:", lr_scheduler_s_cnn.get_last_lr())
+        print("lr classifier head:", lr_scheduler_head.get_last_lr())
+        train_source(source_CNN, classifier_head, train_source_iter, optimizer_list, lr_scheduler_list, epoch, args,
+                     writer)
 
         temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
-        acc1 = utils.validate(val_loader, temp_model, args, device)
+        acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+        writer.add_scalar('Pre_Train/Source_CNN/target_Loss', losses_avg, epoch + 1)
+        writer.add_scalar('Pre_Train/Source_CNN/target_AccTop1', acc1, epoch + 1)
+
         torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
         torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
         if acc1 > best_acc1:
@@ -202,13 +206,20 @@ def main(args: argparse.Namespace):
     for epoch in range(args.epochs2):
         optimizer_list = [optimizer_t_cnn, optimizer_d]
         lr_scheduler_list = [lr_scheduler_t_cnn, lr_scheduler_d]
-        print("lr target cnn:", lr_scheduler_t_cnn.get_lr())
-        print("lr discriminator:", lr_scheduler_d.get_lr())
+        print("lr target cnn:", lr_scheduler_t_cnn.get_last_lr())
+        print("lr discriminator:", lr_scheduler_d.get_last_lr())
+
         train_adversarial(source_CNN, target_CNN, domain_discri, domain_adv_loss, train_source_iter,
-                          train_target_iter, optimizer_list, lr_scheduler_list, epoch, args)
+                          train_target_iter, optimizer_list, lr_scheduler_list, epoch, args, writer)
         # 拼接模型，做测试
         temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
-        acc1 = utils.validate(val_loader, temp_model, args, device)
+        acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+        writer.add_scalar('Adversarial/Target_CNN/target_AccTop1', acc1, epoch + 1)
+        writer.add_scalar('Adversarial/Target_CNN/target_Loss', losses_avg, epoch + 1)
+        acc1, losses_avg = utils.validate(train_source_loader, temp_model, args, device)
+        writer.add_scalar('Adversarial/Target_CNN/source_Loss', losses_avg, epoch + 1)
+        writer.add_scalar('Adversarial/Target_CNN/source_AccTop1', acc1, epoch + 1)
+
         torch.save(target_CNN.state_dict(), logger.get_checkpoint_path('target_CNN_latest'))
         if acc1 > best_acc1:
             shutil.copy(logger.get_checkpoint_path('target_CNN_latest'), logger.get_checkpoint_path('target_CNN_best'))
@@ -223,10 +234,11 @@ def main(args: argparse.Namespace):
     print("test_acc1 = {:3.1f}".format(acc1))
 
     logger.close()
+    writer.close()
 
 
 def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: ForeverDataIterator, optimizer: List,
-                 lr_scheduler: List, epoch: int, args: argparse.Namespace):
+                 lr_scheduler: List, epoch: int, args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')
     losses_s = AverageMeter('Cls Loss', ':6.2f')
@@ -255,26 +267,33 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
         for j in lr_scheduler:
             j.step()
 
-        losses_s.update(loss, x_s.size(0))
+        losses_s.update(loss.item(), x_s.size(0))
         cls_accs.update(accuracy(y_s, labels_s)[0].item(), x_s.size(0))
         batch_time.update(time.time() - end)
         end = time.time()
 
         if i % args.print_freq == 0:
             progress.display(i)
+    writer.add_scalar('Pre_Train/Source_CNN/source_Loss', losses_s.avg, epoch + 1)
+    writer.add_scalar('Pre_Train/Source_CNN/source_AccTop1', cls_accs.avg, epoch + 1)
 
 
 def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discri: DomainDiscriminator,
                       domain_adv: DomainAdversarialLoss, train_source_iter: ForeverDataIterator,
                       train_target_iter: ForeverDataIterator, optimizer: List, lr_sceduler: List, epoch: int,
-                      args: argparse.Namespace):
+                      args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')  # 处理
-    losses_cnn = AverageMeter('Cls Loss', ':6.2f')
-    losses_discriminator = AverageMeter('Discriminator Loss', ':6.2f')
-    domain_accs = AverageMeter('Domain Acc', ':3.1f')
+
+    target_cnn_loss = AverageMeter('Target_CNN Loss', ':6.2f')
+    target_cnn_acc = AverageMeter('Target_CNN AccTop1', ':3.1f')
+    domain_accs = AverageMeter('Domain AccTop1', ':3.1f')
+    target_cnn_domain_loss=AverageMeter('Target_CNN DomainLoss', ':6.2f')
+    discriminator_domain_loss=AverageMeter('Discriminator DomainLoss', ':6.2f')
+
     progress = ProgressMeter(args.iters_per_epoch,
-                             [batch_time, data_time, losses_discriminator, domain_accs],
+                             [batch_time, data_time, target_cnn_loss, target_cnn_acc, target_cnn_domain_loss,
+                              discriminator_domain_loss, domain_accs],
                              prefix="Epoch: [{}]".format(epoch))
     set_requires_grad(source_cnn, False)
     source_cnn.eval()
@@ -306,6 +325,10 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             optimizer[1].step()
             lr_sceduler[1].step()
 
+            domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+            domain_accs.update(domain_acc.item(), x_s.size(0))
+            discriminator_domain_loss.update(loss_dis.item(),x_s.size(0))
+
         # 更新Target CNN
         for j in range(args.k2):
             x_s, labels_s = next(train_source_iter)
@@ -328,17 +351,16 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             optimizer[0].step()
             lr_sceduler[0].step()
 
-            losses_cnn.update(loss_cnn.item(), x_s.size(0))
-            losses_discriminator.update(loss_dis.item(), x_s.size(0))
-            domain_acc = 0.5 * (
-                    binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
-            domain_accs.update(domain_acc.item(), x_s.size(0))
+            target_cnn_domain_loss.update(loss_cnn.item(),x_s.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
 
         if i % args.print_freq == 0:
             progress.display(i)
+    writer.add_scalar('Adversarial/Target_CNN/adv_Loss', target_cnn_domain_loss.avg, epoch + 1)
+    writer.add_scalar('Adversarial/discriminator_NN/adv_Loss', discriminator_domain_loss.avg, epoch + 1)
+    writer.add_scalar('Adversarial/discriminator_NN/adv_AccTop1', domain_accs.avg, epoch + 1)
 
 
 if __name__ == '__main__':

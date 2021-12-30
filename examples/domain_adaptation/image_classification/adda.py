@@ -132,8 +132,8 @@ def main(args: argparse.Namespace):
     # start training
     best_acc1 = 0.
     for epoch in range(args.epochs):
-        print("lr classifier:", lr_scheduler.get_lr())
-        print("lr discriminator:", lr_scheduler_d.get_lr())
+        print("lr classifier:", lr_scheduler.get_last_lr())
+        print("lr discriminator:", lr_scheduler_d.get_last_lr())
         # train for one epoch
         train(train_source_iter, train_target_iter, classifier, domain_discri, domain_adv, gl, optimizer,
               lr_scheduler, optimizer_d, lr_scheduler_d, epoch, args)

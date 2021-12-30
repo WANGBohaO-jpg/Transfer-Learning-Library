@@ -51,11 +51,13 @@ class CompleteLogger:
         self.root = root
         self.model = model_name
         self.phase = phase
+        self.tensorboard_directory = os.path.join(self.root, self.model, "tensorboard")
         self.visualize_directory = os.path.join(self.root, self.model, "visualize")
         self.checkpoint_directory = os.path.join(self.root, self.model, "checkpoints")
         self.epoch = 0
 
         os.makedirs(os.path.join(self.root, self.model), exist_ok=True)
+        os.makedirs(self.tensorboard_directory, exist_ok=True)
         os.makedirs(self.visualize_directory, exist_ok=True)
         os.makedirs(self.checkpoint_directory, exist_ok=True)
 
