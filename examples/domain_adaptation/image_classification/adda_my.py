@@ -46,6 +46,29 @@ import utils
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+class feature_CNN(nn.Module):
+    def __init__(self, backbone: nn.Module, bottleneck_dim):
+        super(feature_CNN, self).__init__()
+        self.backbone = backbone
+        self.pool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
+        self.bottleneck = nn.Sequential(nn.Linear(backbone.out_features, bottleneck_dim),
+                                        nn.BatchNorm1d(bottleneck_dim),
+                                        nn.ReLU())
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = self.pool(x)
+        x = torch.flatten(x, 1)
+        x = self.bottleneck(x)
+        return x
+
+
 def main(args: argparse.Namespace):
     logger = CompleteLogger(args.log, args.arch, args.phase)
     print(args)
@@ -87,20 +110,12 @@ def main(args: argparse.Namespace):
     # create model
     print("=> using model '{}'".format(args.arch))
     if "resnet50" in args.arch:
-        source_backbone = utils.get_model(args.arch, pretrain=not args.scratch)  # source的feature extractor
-        source_bottleneck = nn.Sequential(nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-                                          nn.Linear(source_backbone.out_features, args.bottleneck_dim),
-                                          nn.BatchNorm1d(args.bottleneck_dim),
-                                          nn.ReLU())
-        source_CNN = nn.Sequential(source_backbone, source_bottleneck).to(device)
+        source_backbone = utils.get_model(args.arch, pretrain=not args.scratch)
+        source_CNN = feature_CNN(backbone=source_backbone, bottleneck_dim=args.bottleneck_dim).to(device)
 
         target_backbone = utils.get_model(args.arch, pretrain=not args.scratch)
-        target_CNN = nn.Sequential(target_backbone,
-                                   nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-                                   nn.Linear(target_backbone.out_features, args.bottleneck_dim),
-                                   nn.BatchNorm1d(args.bottleneck_dim),
-                                   nn.ReLU()
-                                   ).to(device)
+        target_CNN = feature_CNN(backbone=target_backbone, bottleneck_dim=args.bottleneck_dim).to(device)
+
         classifier_head = nn.Linear(args.bottleneck_dim, num_classes).to(device)
     elif "vgg" in args.arch:
         pass  # TODO:vgg网络待增加
@@ -113,13 +128,13 @@ def main(args: argparse.Namespace):
                          nesterov=True)
     optimizer_s_cnn = SGD(
         [{"params": source_backbone.parameters(), "lr": 0.1 * args.lr if not args.scratch else args.lr},
-         {"params": source_bottleneck.parameters(), "lr": args.lr}],
+         {"params": source_CNN.bottleneck.parameters(), "lr": args.lr}],
         args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     optimizer_d = SGD(domain_discri.get_parameters(), args.lr_d, momentum=args.momentum, weight_decay=args.weight_decay,
                       nesterov=True)  # 领域判别器的优化器
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
-    # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子
+    # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子 TODO:学习率有问题！
     lr_scheduler_head = LambdaLR(optimizer_head,
                                  lambda x: args.lr * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_s_cnn = LambdaLR(optimizer_s_cnn,
@@ -140,7 +155,6 @@ def main(args: argparse.Namespace):
     # analysis the model
     if args.phase == 'analysis':
         # extract features from both domains
-        # feature_extractor = nn.Sequential(classifier.backbone, classifier.pool_layer, classifier.bottleneck).to(device)
         source_feature = collect_feature(train_source_loader, source_CNN, device)
         target_feature = collect_feature(train_target_loader, target_CNN, device)
         # plot t-SNE
@@ -153,7 +167,7 @@ def main(args: argparse.Namespace):
         return
 
     if args.phase == 'test':
-        temp_model = nn.Sequential(target_CNN, classifier_head)
+        temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1 = utils.validate(test_loader, temp_model, args, device)
         print(acc1)
         return
@@ -165,10 +179,13 @@ def main(args: argparse.Namespace):
         optimizer_list = [optimizer_s_cnn, optimizer_head]
         lr_scheduler_list = [lr_scheduler_s_cnn, lr_scheduler_head]
         print("lr source cnn:", lr_scheduler_s_cnn.get_lr())
+        # 打印当前学习率
+        print("optimizer's lr: ", optimizer_s_cnn.state_dict()['param_groups'][0]['lr'])
+
         print("lr classifier head:", lr_scheduler_head.get_lr())
         train_source(source_CNN, classifier_head, train_source_iter, optimizer_list, lr_scheduler_list, epoch, args)
 
-        temp_model = nn.Sequential(target_CNN, classifier_head)
+        temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1 = utils.validate(val_loader, temp_model, args, device)
         torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
         torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
@@ -177,6 +194,9 @@ def main(args: argparse.Namespace):
             shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
                         logger.get_checkpoint_path('classifier_head_best'))
         best_acc1 = max(acc1, best_acc1)
+
+    # 将target模型的参数初始化为source
+    target_CNN.load_state_dict(source_CNN.state_dict())
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
     best_acc1 = 0
@@ -189,7 +209,7 @@ def main(args: argparse.Namespace):
         train_adversarial(source_CNN, target_CNN, domain_discri, domain_adv_loss, train_source_iter,
                           train_target_iter, optimizer_list, lr_scheduler_list, epoch, args)
         # 拼接模型，做测试
-        temp_model = nn.Sequential(target_CNN, classifier_head)
+        temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1 = utils.validate(val_loader, temp_model, args, device)
         torch.save(target_CNN.state_dict(), logger.get_checkpoint_path('target_CNN_latest'))
         if acc1 > best_acc1:
@@ -227,7 +247,11 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
         set_requires_grad(source_cnn, True)
         set_requires_grad(head, False)
 
-        y_s = head(source_cnn(x_s))
+        print(x_s.shape)
+        y_s = source_cnn(x_s)
+        print(y_s.shape)
+        y_s = head(y_s)
+        print(y_s.shape)
         loss = F.cross_entropy(y_s, labels_s)
 
         for i in optimizer:
@@ -313,7 +337,8 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 
             losses_cnn.update(loss_cnn.item(), x_s.size(0))
             losses_discriminator.update(loss_dis.item(), x_s.size(0))
-            domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+            domain_acc = 0.5 * (
+                    binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
             domain_accs.update(domain_acc.item(), x_s.size(0))
 
         batch_time.update(time.time() - end)
