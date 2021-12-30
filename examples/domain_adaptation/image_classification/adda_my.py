@@ -247,20 +247,16 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
         set_requires_grad(source_cnn, True)
         set_requires_grad(head, False)
 
-        print(x_s.shape)
-        y_s = source_cnn(x_s)
-        print(y_s.shape)
-        y_s = head(y_s)
-        print(y_s.shape)
+        y_s = head(source_cnn(x_s))
         loss = F.cross_entropy(y_s, labels_s)
 
-        for i in optimizer:
-            i.zero_grad()
+        for j in optimizer:
+            j.zero_grad()
         loss.backward()
-        for i in optimizer:
-            i.step()
-        for i in lr_scheduler:
-            i.step()
+        for j in optimizer:
+            j.step()
+        for j in lr_scheduler:
+            j.step()
 
         losses_s.update(loss, x_s.size(0))
         cls_accs.update(accuracy(y_s, labels_s)[0].item(), x_s.size(0))
@@ -289,7 +285,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
     end = time.time()
     for i in range(args.iters_per_epoch):
         # 更新判别器
-        for i in range(args.k1):
+        for j in range(args.k1):
             x_s, labels_s = next(train_source_iter)
             x_t, _ = next(train_target_iter)
             x_s = x_s.to(device)
@@ -314,7 +310,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             lr_sceduler[1].step()
 
         # 更新Target CNN
-        for i in range(args.k2):
+        for j in range(args.k2):
             x_s, labels_s = next(train_source_iter)
             x_t, _ = next(train_target_iter)
             x_s = x_s.to(device)
