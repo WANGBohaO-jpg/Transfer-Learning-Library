@@ -185,7 +185,7 @@ def main(args: argparse.Namespace):
         print("lr classifier head:", lr_scheduler_head.get_lr())
         train_source(source_CNN, classifier_head, train_source_iter, optimizer_list, lr_scheduler_list, epoch, args)
 
-        temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
+        temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
         acc1 = utils.validate(val_loader, temp_model, args, device)
         torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
         torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
