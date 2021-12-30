@@ -245,7 +245,7 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
         source_cnn.train()
         head.train()
         set_requires_grad(source_cnn, True)
-        set_requires_grad(head, False)
+        set_requires_grad(head, True)
 
         y_s = head(source_cnn(x_s))
         loss = F.cross_entropy(y_s, labels_s)
