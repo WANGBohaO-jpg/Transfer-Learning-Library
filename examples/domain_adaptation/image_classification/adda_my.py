@@ -135,14 +135,12 @@ def main(args: argparse.Namespace):
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
     # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子 TODO:学习率有问题！
-    lr_scheduler_head = LambdaLR(optimizer_head,
-                                 lambda x: args.lr * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    lr_scheduler_s_cnn = LambdaLR(optimizer_s_cnn,
-                                  lambda x: args.lr * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    lr_scheduler_t_cnn = LambdaLR(optimizer_t_cnn,
-                                  lambda x: args.lr * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    lr_scheduler_d = LambdaLR(optimizer_d, lambda x: args.lr_d * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-
+    lr_scheduler_head = LambdaLR(optimizer_head, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+    lr_scheduler_s_cnn = LambdaLR(optimizer_s_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+    lr_scheduler_t_cnn = LambdaLR(optimizer_t_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+    lr_scheduler_d = LambdaLR(optimizer_d, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+    print("optimizer's0 lr: ", optimizer_s_cnn.state_dict()['param_groups'][0]['lr'])
+    print("optimizer's1 lr: ", optimizer_s_cnn.state_dict()['param_groups'][1]['lr'])
     # resume from the best checkpoint
     if args.phase != 'train':
         checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_best'), map_location='cpu')
@@ -238,8 +236,7 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
     end = time.time()
     for i in range(args.iters_per_epoch):
         x_s, labels_s = next(train_source_iter)
-        x_s = x_s.to(device)
-        labels_s = labels_s.to(device)
+        x_s, labels_s = x_s.to(device), labels_s.to(device)
         data_time.update(time.time() - end)
 
         source_cnn.train()
