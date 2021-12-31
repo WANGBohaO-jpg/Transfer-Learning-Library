@@ -34,6 +34,8 @@ from common.utils.meter import AverageMeter, ProgressMeter
 from common.utils.logger import CompleteLogger
 from common.utils.analysis import collect_feature, tsne, a_distance
 
+from tensorboardX import SummaryWriter
+
 sys.path.append('.')
 import utils
 
@@ -42,6 +44,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main(args: argparse.Namespace):
     logger = CompleteLogger(args.log, args.arch, args.phase)
+    writer = SummaryWriter(log_dir=logger.tensorboard_directory)
     print(args)
 
     if args.seed is not None:
@@ -136,10 +139,11 @@ def main(args: argparse.Namespace):
         print("lr discriminator:", lr_scheduler_d.get_last_lr())
         # train for one epoch
         train(train_source_iter, train_target_iter, classifier, domain_discri, domain_adv, gl, optimizer,
-              lr_scheduler, optimizer_d, lr_scheduler_d, epoch, args)
+              lr_scheduler, optimizer_d, lr_scheduler_d, epoch, args, writer)
 
         # evaluate on validation set
         acc1 = utils.validate(val_loader, classifier, args, device)
+        writer.add_scalar('Target/AccTop1', acc1, epoch + 1)
 
         # remember best acc@1 and save checkpoint
         torch.save(classifier.state_dict(), logger.get_checkpoint_path('latest'))
@@ -160,7 +164,7 @@ def main(args: argparse.Namespace):
 def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverDataIterator, model: ImageClassifier,
           domain_discri: DomainDiscriminator, domain_adv: DomainAdversarialLoss, gl,
           optimizer: SGD, lr_scheduler: LambdaLR, optimizer_d: SGD, lr_scheduler_d: LambdaLR,
-          epoch: int, args: argparse.Namespace):
+          epoch: int, args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')
     losses_s = AverageMeter('Cls Loss', ':6.2f')
@@ -234,6 +238,11 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
 
         if i % args.print_freq == 0:
             progress.display(i)
+    writer.add_scalar('Source/losses_Transfer', losses_transfer.avg, epoch + 1)
+    writer.add_scalar('Source/losses_s', losses_s.avg, epoch + 1)
+    writer.add_scalar('Source/losses_discriminator', losses_discriminator.avg, epoch + 1)
+    writer.add_scalar('Source/cls_accs', cls_acc.avg, epoch + 1)
+    writer.add_scalar('Source/domain_accs', domain_accs.avg, epoch + 1)
 
 
 if __name__ == '__main__':

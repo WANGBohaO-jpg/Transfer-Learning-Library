@@ -133,10 +133,10 @@ def main(args: argparse.Namespace):
         [{"params": source_backbone.parameters(), "lr": 0.1 * args.lr if not args.scratch else args.lr},
          {"params": source_CNN.bottleneck.parameters(), "lr": args.lr}],
         args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-    optimizer_d = SGD(domain_discri.get_parameters(), args.lr_d, momentum=args.momentum, weight_decay=args.weight_decay,
-                      nesterov=True)  # 领域判别器的优化器
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
+    optimizer_d = SGD(domain_discri.get_parameters(), args.lr_d, momentum=args.momentum, weight_decay=args.weight_decay,
+                      nesterov=True)  # 领域判别器的优化器
 
     # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子
     lr_scheduler_head = LambdaLR(optimizer_head, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
@@ -197,7 +197,7 @@ def main(args: argparse.Namespace):
                         logger.get_checkpoint_path('classifier_head_best'))
         best_acc1 = max(acc1, best_acc1)
 
-    # 将target模型的参数初始化为source
+    # 将target模型的参数初始化为source TODO:可能存在bug
     target_CNN.load_state_dict(source_CNN.state_dict())
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
@@ -288,8 +288,8 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
     target_cnn_loss = AverageMeter('Target_CNN Loss', ':6.2f')
     target_cnn_acc = AverageMeter('Target_CNN AccTop1', ':3.1f')
     domain_accs = AverageMeter('Domain AccTop1', ':3.1f')
-    target_cnn_domain_loss=AverageMeter('Target_CNN DomainLoss', ':6.2f')
-    discriminator_domain_loss=AverageMeter('Discriminator DomainLoss', ':6.2f')
+    target_cnn_domain_loss = AverageMeter('Target_CNN DomainLoss', ':6.2f')
+    discriminator_domain_loss = AverageMeter('Discriminator DomainLoss', ':6.2f')
 
     progress = ProgressMeter(args.iters_per_epoch,
                              [batch_time, data_time, target_cnn_loss, target_cnn_acc, target_cnn_domain_loss,
@@ -301,6 +301,10 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
     end = time.time()
     for i in range(args.iters_per_epoch):
         # 更新判别器
+        target_cnn.eval()
+        domain_discri.train()
+        set_requires_grad(target_cnn, False)
+        set_requires_grad(domain_discri, True)
         for j in range(args.k1):
             x_s, labels_s = next(train_source_iter)
             x_t, _ = next(train_target_iter)
@@ -325,11 +329,16 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             optimizer[1].step()
             lr_sceduler[1].step()
 
-            domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+            domain_acc = 0.5 * (
+                        binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
             domain_accs.update(domain_acc.item(), x_s.size(0))
-            discriminator_domain_loss.update(loss_dis.item(),x_s.size(0))
+            discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
 
         # 更新Target CNN
+        target_cnn.train()
+        domain_discri.eval()
+        set_requires_grad(target_cnn, True)
+        set_requires_grad(domain_discri, False)
         for j in range(args.k2):
             x_s, labels_s = next(train_source_iter)
             x_t, _ = next(train_target_iter)
@@ -351,7 +360,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             optimizer[0].step()
             lr_sceduler[0].step()
 
-            target_cnn_domain_loss.update(loss_cnn.item(),x_s.size(0))
+            target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
