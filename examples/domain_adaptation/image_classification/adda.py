@@ -142,8 +142,9 @@ def main(args: argparse.Namespace):
               lr_scheduler, optimizer_d, lr_scheduler_d, epoch, args, writer)
 
         # evaluate on validation set
-        acc1 = utils.validate(val_loader, classifier, args, device)
+        acc1, loss = utils.validate(val_loader, classifier, args, device)
         writer.add_scalar('Target/AccTop1', acc1, epoch + 1)
+        writer.add_scalar('Target/Loss', loss, epoch + 1)
 
         # remember best acc@1 and save checkpoint
         torch.save(classifier.state_dict(), logger.get_checkpoint_path('latest'))
