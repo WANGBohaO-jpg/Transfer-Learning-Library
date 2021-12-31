@@ -12,8 +12,8 @@ CUDA_VISIBLE_DEVICES=0 python adda.py data/office31 -d Office31 -s D -t A -a vgg
 CUDA_VISIBLE_DEVICES=0 python adda.py data/office31 -d Office31 -s W -t A -a vgg16_bn --epochs 20 --seed 1 --log logs/adda/Office31_W2A
 # ResNet50, Office31, Single Source
 CUDA_VISIBLE_DEVICES=0 nohup python adda.py data/office31 -d Office31 -s A -t W -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_A2W &
-CUDA_VISIBLE_DEVICES=1 nohup python adda.py data/office31 -d Office31 -s D -t W -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_D2W &
-CUDA_VISIBLE_DEVICES=2 nohup python adda.py data/office31 -d Office31 -s W -t D -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_W2D &
+CUDA_VISIBLE_DEVICES=3 nohup python adda.py data/office31 -d Office31 -s D -t W -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_D2W &
+CUDA_VISIBLE_DEVICES=5 nohup python adda.py data/office31 -d Office31 -s W -t D -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_W2D &
 CUDA_VISIBLE_DEVICES=3 nohup python adda.py data/office31 -d Office31 -s A -t D -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_A2D &
 CUDA_VISIBLE_DEVICES=4 nohup python adda.py data/office31 -d Office31 -s D -t A -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_D2A &
 CUDA_VISIBLE_DEVICES=5 nohup python adda.py data/office31 -d Office31 -s W -t A -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_W2A &

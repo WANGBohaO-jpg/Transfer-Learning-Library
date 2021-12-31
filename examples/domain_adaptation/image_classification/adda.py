@@ -159,7 +159,7 @@ def main(args: argparse.Namespace):
     print("test_acc1 = {:3.1f}".format(acc1))
 
     logger.close()
-
+    writer.close()
 
 def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverDataIterator, model: ImageClassifier,
           domain_discri: DomainDiscriminator, domain_adv: DomainAdversarialLoss, gl,
