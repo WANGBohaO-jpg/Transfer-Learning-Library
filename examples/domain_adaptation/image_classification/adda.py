@@ -241,7 +241,7 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
     writer.add_scalar('Source/losses_Transfer', losses_transfer.avg, epoch + 1)
     writer.add_scalar('Source/losses_s', losses_s.avg, epoch + 1)
     writer.add_scalar('Source/losses_discriminator', losses_discriminator.avg, epoch + 1)
-    writer.add_scalar('Source/cls_accs', cls_acc.avg, epoch + 1)
+    writer.add_scalar('Source/cls_accs', cls_accs.avg, epoch + 1)
     writer.add_scalar('Source/domain_accs', domain_accs.avg, epoch + 1)
 
 
