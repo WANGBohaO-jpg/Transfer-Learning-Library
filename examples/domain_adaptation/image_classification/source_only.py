@@ -2,29 +2,29 @@
 @author: Junguang Jiang
 @contact: JiangJunguang1123@outlook.com
 """
+import argparse
+import os.path as osp
 import random
+import shutil
+import sys
 import time
 import warnings
-import sys
-import argparse
-import shutil
-import os.path as osp
 
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import SGD
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 
 sys.path.append('../../..')
 from common.modules.classifier import Classifier
 from common.utils.data import ForeverDataIterator
-from common.utils.metric import accuracy
 from common.utils.meter import AverageMeter, ProgressMeter
 from common.utils.logger import CompleteLogger
 from common.utils.analysis import collect_feature, tsne, a_distance
+from common.utils.metric import accuracy, ConfusionMatrix
 
 sys.path.append('.')
 import utils
@@ -32,8 +32,76 @@ import utils
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def del_tensor_ele(arr, index):
+    arr1 = arr[0:index]
+    arr2 = arr[index + 1:]
+    return torch.cat((arr1, arr2), dim=0)
+
+
+def validate(val_loader, model, args, device, confidence=0) -> float:
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    progress = ProgressMeter(
+        len(val_loader),
+        [batch_time, losses, top1],
+        prefix='Test: ')
+
+    # switch to evaluate mode
+    model.eval()
+    if args.per_class_eval:
+        confmat = ConfusionMatrix(len(args.class_names))
+    else:
+        confmat = None
+
+    with torch.no_grad():
+        end = time.time()
+        for i, (images, target) in enumerate(val_loader):
+            images = images.to(device)
+            target = target.to(device)
+            print(images.shape)
+            print(target.shape)
+
+            # compute output
+            output = model(images)
+            sig = False
+            for i in range(output.size(0)):
+                if torch.max(output[i]) < confidence:
+                    del_tensor_ele(output, i)
+                    del_tensor_ele(target, i)
+                else:
+                    sig = True
+            if not sig:
+                return None, None
+
+            loss = F.cross_entropy(output, target)
+
+            # measure accuracy and record loss
+            acc1, = accuracy(output, target, topk=(1,))
+            if confmat:
+                confmat.update(target, output.argmax(1))
+            losses.update(loss.item(), images.size(0))
+            top1.update(acc1.item(), images.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            # if i % args.print_freq == 0:
+            #     progress.display(i)
+
+        print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
+        if confmat:
+            print(confmat.format(args.class_names))
+
+    return top1.avg
+
+
 def main(args: argparse.Namespace):
     logger = CompleteLogger(args.log, args.phase)
+    if 0 not in args.confidence:
+        args.confidence.append(0)
+    args.confidence.sort()
     print(args)
 
     if args.seed is not None:
@@ -111,13 +179,17 @@ def main(args: argparse.Namespace):
         utils.pretrain(train_source_iter, classifier, optimizer, lr_scheduler, epoch, args, device)
 
         # evaluate on validation set
-        acc1 = utils.validate(val_loader, classifier, args, device)
+        acc1 = []
+        for i in range(len(args.confidence)):
+            confidence = args.confidence[i]
+            acc1.append(validate(val_loader, classifier, args, device, confidence))
+        print(acc1)
 
         # remember best acc@1 and save checkpoint
         torch.save(classifier.state_dict(), logger.get_checkpoint_path('latest'))
-        if acc1 > best_acc1:
+        if acc1[0] > best_acc1:
             shutil.copy(logger.get_checkpoint_path('latest'), logger.get_checkpoint_path('best'))
-        best_acc1 = max(acc1, best_acc1)
+        best_acc1 = max(acc1[0], best_acc1)
 
     print("best_acc1 = {:3.1f}".format(best_acc1))
 
@@ -132,6 +204,7 @@ def main(args: argparse.Namespace):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Source Only for Unsupervised Domain Adaptation')
     # dataset parameters
+    parser.add_argument('-confidence', nargs='+', type=int, default=[0])
     parser.add_argument('root', metavar='DIR',
                         help='root path of dataset')
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),
