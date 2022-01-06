@@ -95,7 +95,6 @@ def main(args: argparse.Namespace):
 
     # define loss function
     domain_adv = DomainAdversarialLoss().to(device)
-    # TODO:看上去像梯度反转层 最大迭代次数1000是什么意思？
     gl = WarmStartGradientLayer(alpha=1., lo=0., hi=1., max_iters=1000, auto_step=True)
 
     # define optimizer and lr scheduler
@@ -203,7 +202,7 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
         # adversarial training to fool the discriminator
         d = domain_discri(gl(f))  # 梯度反转层
         d_s, d_t = d.chunk(2, dim=0)
-        # 对抗损失 TODO：feature提取器的损失没有修改
+        # 对抗损失
         loss_transfer = 0.5 * (domain_adv(d_s, 'target') + domain_adv(d_t, 'source'))
 
         optimizer.zero_grad()
