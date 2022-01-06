@@ -162,6 +162,7 @@ def main(args: argparse.Namespace):
     logger.close()
     writer.close()
 
+
 def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverDataIterator, model: ImageClassifier,
           domain_discri: DomainDiscriminator, domain_adv: DomainAdversarialLoss, gl,
           optimizer: SGD, lr_scheduler: LambdaLR, optimizer_d: SGD, lr_scheduler_d: LambdaLR,
@@ -239,11 +240,11 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
 
         if i % args.print_freq == 0:
             progress.display(i)
-    writer.add_scalar('Source/losses_Transfer', losses_transfer.avg, epoch + 1)
+    writer.add_scalar('Adv/losses_Transfer', losses_transfer.avg, epoch + 1)
     writer.add_scalar('Source/losses_s', losses_s.avg, epoch + 1)
-    writer.add_scalar('Source/losses_discriminator', losses_discriminator.avg, epoch + 1)
+    writer.add_scalar('Adv/losses_discriminator', losses_discriminator.avg, epoch + 1)
     writer.add_scalar('Source/cls_accs', cls_accs.avg, epoch + 1)
-    writer.add_scalar('Source/domain_accs', domain_accs.avg, epoch + 1)
+    writer.add_scalar('Adv/domain_accs', domain_accs.avg, epoch + 1)
 
 
 if __name__ == '__main__':

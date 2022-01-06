@@ -186,8 +186,8 @@ def main(args: argparse.Namespace):
 
         temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
-        writer.add_scalar('Pre_Train/Source_CNN/target_Loss', losses_avg, epoch + 1)
-        writer.add_scalar('Pre_Train/Source_CNN/target_AccTop1', acc1, epoch + 1)
+        writer.add_scalar('Pre_Train/Target/losses', losses_avg, epoch + 1)
+        writer.add_scalar('Pre_Train/Target/acc1', acc1, epoch + 1)
 
         torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
         torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
@@ -214,11 +214,11 @@ def main(args: argparse.Namespace):
         # 拼接模型，做测试
         temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
-        writer.add_scalar('Adversarial/Target_CNN/target_AccTop1', acc1, epoch + 1)
-        writer.add_scalar('Adversarial/Target_CNN/target_Loss', losses_avg, epoch + 1)
+        writer.add_scalar('Adversarial/Target/acc1', acc1, epoch + 1)
+        writer.add_scalar('Adversarial/Target/losses_avg', losses_avg, epoch + 1)
         acc1, losses_avg = utils.validate(train_source_loader, temp_model, args, device)
-        writer.add_scalar('Adversarial/Target_CNN/source_Loss', losses_avg, epoch + 1)
-        writer.add_scalar('Adversarial/Target_CNN/source_AccTop1', acc1, epoch + 1)
+        writer.add_scalar('Adversarial/Source/losses_avg', losses_avg, epoch + 1)
+        writer.add_scalar('Adversarial/Source/acc1', acc1, epoch + 1)
 
         torch.save(target_CNN.state_dict(), logger.get_checkpoint_path('target_CNN_latest'))
         if acc1 > best_acc1:
@@ -274,8 +274,8 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
 
         if i % args.print_freq == 0:
             progress.display(i)
-    writer.add_scalar('Pre_Train/Source_CNN/source_Loss', losses_s.avg, epoch + 1)
-    writer.add_scalar('Pre_Train/Source_CNN/source_AccTop1', cls_accs.avg, epoch + 1)
+    writer.add_scalar('Pre_Train/Source/losses_s', losses_s.avg, epoch + 1)
+    writer.add_scalar('Pre_Train/Source/cls_accs', cls_accs.avg, epoch + 1)
 
 
 def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discri: DomainDiscriminator,
@@ -284,16 +284,12 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
                       args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')  # 处理
-
-    target_cnn_loss = AverageMeter('Target_CNN Loss', ':6.2f')
-    target_cnn_acc = AverageMeter('Target_CNN AccTop1', ':3.1f')
     domain_accs = AverageMeter('Domain AccTop1', ':3.1f')
     target_cnn_domain_loss = AverageMeter('Target_CNN DomainLoss', ':6.2f')
     discriminator_domain_loss = AverageMeter('Discriminator DomainLoss', ':6.2f')
 
     progress = ProgressMeter(args.iters_per_epoch,
-                             [batch_time, data_time, target_cnn_loss, target_cnn_acc, target_cnn_domain_loss,
-                              discriminator_domain_loss, domain_accs],
+                             [batch_time, data_time, target_cnn_domain_loss, discriminator_domain_loss, domain_accs],
                              prefix="Epoch: [{}]".format(epoch))
     set_requires_grad(source_cnn, False)
     source_cnn.eval()
@@ -367,9 +363,10 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 
         if i % args.print_freq == 0:
             progress.display(i)
-    writer.add_scalar('Adversarial/Target_CNN/adv_Loss', target_cnn_domain_loss.avg, epoch + 1)
-    writer.add_scalar('Adversarial/discriminator_NN/adv_Loss', discriminator_domain_loss.avg, epoch + 1)
-    writer.add_scalar('Adversarial/discriminator_NN/adv_AccTop1', domain_accs.avg, epoch + 1)
+
+    writer.add_scalar('Adversarial/Adv/target_cnn_domain_loss', target_cnn_domain_loss.avg, epoch + 1)
+    writer.add_scalar('Adversarial/Adv/discriminator_domain_loss', discriminator_domain_loss.avg, epoch + 1)
+    writer.add_scalar('Adversarial/Adv/domain_accs', domain_accs.avg, epoch + 1)
 
 
 if __name__ == '__main__':
