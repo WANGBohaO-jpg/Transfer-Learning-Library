@@ -32,7 +32,7 @@ def accuracy(output, target, topk=(1,)):
         batch_size = target.size(0)
         # 增加对没有数据的特判
         if batch_size == 0:
-            return [0]
+            return [torch.tensor(0.0, dtype=torch.float32)]
 
         _, pred = output.topk(maxk, 1, True, True)  # topk函数返回value和indices
         pred = pred.t()

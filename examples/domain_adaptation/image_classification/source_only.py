@@ -74,11 +74,6 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
             output = output_temp
             target = target_temp
 
-            if confidence == 1:
-                print(confidence)
-                print(output.shape)
-                print(target.shape)
-
             # loss = F.cross_entropy(output, target)
 
             # measure accuracy and record loss
@@ -86,7 +81,7 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
             if confmat:
                 confmat.update(target, output.argmax(1))
             # losses.update(loss.item(), output.size(0))
-            top1.update(acc1, output.size(0))
+            top1.update(acc1.item(), output.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
