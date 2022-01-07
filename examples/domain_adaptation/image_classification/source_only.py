@@ -93,7 +93,7 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
 
 
 def main(args: argparse.Namespace):
-    logger = CompleteLogger(args.log, args.phase)
+    logger = CompleteLogger(args.log, args.arch, args.phase)
     if 0 not in args.confidence:
         args.confidence.append(0)
     args.confidence.sort()
