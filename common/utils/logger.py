@@ -55,6 +55,7 @@ class CompleteLogger:
         self.tensorboard_directory = os.path.join(self.root, self.model, "tensorboard", str(self.tensorboard_cnt))
         while os.path.exists(self.tensorboard_directory):
             self.tensorboard_cnt += 1
+            self.tensorboard_directory = os.path.join(self.root, self.model, "tensorboard", str(self.tensorboard_cnt))
         self.visualize_directory = os.path.join(self.root, self.model, "visualize")
         self.checkpoint_directory = os.path.join(self.root, self.model, "checkpoints")
         self.epoch = 0
