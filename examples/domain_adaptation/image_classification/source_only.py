@@ -62,30 +62,35 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
 
             # compute output
             output = model(images)
-            for i in range(output.size(0)):
-                if torch.max(output[i]) < confidence:
-                    output = del_tensor_ele(output, i)
-                    target = del_tensor_ele(target, i)
+            softmax_output = F.softmax(output, dim=1)
+            output_temp = torch.empty(size=(0, output.size(1)), device=device)
+            target_temp = torch.empty(size=(0,), device=device)
 
-            loss = F.cross_entropy(output, target)
+            for j in range(output.size(0)):
+                if torch.max(softmax_output[j]) >= confidence:
+                    output_temp = torch.cat((output_temp, torch.unsqueeze(output[j], dim=0)), dim=0)
+                    target_temp = torch.cat((target_temp, torch.unsqueeze(target[j], dim=0)), dim=0)
+
+            output = output_temp
+            target = target_temp
+
+            if confidence == 1:
+                print(confidence)
+                print(output.shape)
+                print(target.shape)
+
+            # loss = F.cross_entropy(output, target)
 
             # measure accuracy and record loss
             acc1, = accuracy(output, target, topk=(1,))
             if confmat:
                 confmat.update(target, output.argmax(1))
-            losses.update(loss.item(), images.size(0))
-            top1.update(acc1.item(), images.size(0))
+            # losses.update(loss.item(), output.size(0))
+            top1.update(acc1, output.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-
-            # if i % args.print_freq == 0:
-            #     progress.display(i)
-
-        print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
-        if confmat:
-            print(confmat.format(args.class_names))
 
     return top1.avg
 
@@ -189,7 +194,7 @@ def main(args: argparse.Namespace):
 
     # evaluate on test set
     classifier.load_state_dict(torch.load(logger.get_checkpoint_path('best')))
-    acc1 = utils.validate(test_loader, classifier, args, device)
+    acc1, _ = utils.validate(test_loader, classifier, args, device)
     print("test_acc1 = {:3.1f}".format(acc1))
 
     logger.close()
@@ -198,7 +203,7 @@ def main(args: argparse.Namespace):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Source Only for Unsupervised Domain Adaptation')
     # dataset parameters
-    parser.add_argument('-confidence', nargs='+', type=int, default=[0, 0.4, 0.5, 0.6, 0.7])
+    parser.add_argument('-confidence', nargs='+', type=int, default=[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1])
     parser.add_argument('root', metavar='DIR',
                         help='root path of dataset')
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),

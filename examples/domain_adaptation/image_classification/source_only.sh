@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ResNet50, Office31, Single Source
-CUDA_VISIBLE_DEVICES=0 python source_only.py data/office31 -d Office31 -s A -t W -a resnet50 --epochs 5 --seed 0 --log logs/src_only/Office31_A2W
+CUDA_VISIBLE_DEVICES=1 python source_only.py data/office31 -d Office31 -s A -t W -a resnet50 --epochs 5 --seed 0 --log logs/src_only/Office31_A2W
 CUDA_VISIBLE_DEVICES=0 python source_only.py data/office31 -d Office31 -s D -t W -a resnet50 --epochs 5 --seed 0 --log logs/src_only/Office31_D2W
 CUDA_VISIBLE_DEVICES=0 python source_only.py data/office31 -d Office31 -s W -t D -a resnet50 --epochs 5 --seed 0 --log logs/src_only/Office31_W2D
 CUDA_VISIBLE_DEVICES=0 python source_only.py data/office31 -d Office31 -s A -t D -a resnet50 --epochs 5 --seed 0 --log logs/src_only/Office31_A2D

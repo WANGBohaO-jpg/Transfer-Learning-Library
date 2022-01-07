@@ -3,6 +3,7 @@ import prettytable
 
 __all__ = ['keypoint_detection']
 
+
 def binary_accuracy(output: torch.Tensor, target: torch.Tensor) -> float:
     """Computes the accuracy for binary classification"""
     # 传入的output是batch x 1的tensor
@@ -29,6 +30,9 @@ def accuracy(output, target, topk=(1,)):
     with torch.no_grad():
         maxk = max(topk)
         batch_size = target.size(0)
+        # 增加对没有数据的特判
+        if batch_size == 0:
+            return [0]
 
         _, pred = output.topk(maxk, 1, True, True)  # topk函数返回value和indices
         pred = pred.t()
@@ -64,7 +68,7 @@ class ConfusionMatrix(object):
         with torch.no_grad():
             k = (target >= 0) & (target < n)
             inds = n * target[k].to(torch.int64) + output[k]
-            self.mat += torch.bincount(inds, minlength=n**2).reshape(n, n)
+            self.mat += torch.bincount(inds, minlength=n ** 2).reshape(n, n)
 
     def reset(self):
         self.mat.zero_()
@@ -92,19 +96,19 @@ class ConfusionMatrix(object):
             'average row correct: {}\n'
             'IoU: {}\n'
             'mean IoU: {:.1f}').format(
-                acc_global.item() * 100,
-                ['{:.1f}'.format(i) for i in (acc * 100).tolist()],
-                ['{:.1f}'.format(i) for i in (iu * 100).tolist()],
-                iu.mean().item() * 100)
+            acc_global.item() * 100,
+            ['{:.1f}'.format(i) for i in (acc * 100).tolist()],
+            ['{:.1f}'.format(i) for i in (iu * 100).tolist()],
+            iu.mean().item() * 100)
 
     def format(self, classes: list):
         """Get the accuracy and IoU for each class in the table format"""
         acc_global, acc, iu = self.compute()
 
         table = prettytable.PrettyTable(["class", "acc", "iou"])
-        for i, class_name, per_acc, per_iu in zip(range(len(classes)), classes, (acc * 100).tolist(), (iu * 100).tolist()):
+        for i, class_name, per_acc, per_iu in zip(range(len(classes)), classes, (acc * 100).tolist(),
+                                                  (iu * 100).tolist()):
             table.add_row([class_name, per_acc, per_iu])
 
         return 'global correct: {:.1f}\nmean correct:{:.1f}\nmean IoU: {:.1f}\n{}'.format(
             acc_global.item() * 100, acc.mean().item() * 100, iu.mean().item() * 100, table.get_string())
-
