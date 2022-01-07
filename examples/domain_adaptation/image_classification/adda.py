@@ -200,7 +200,7 @@ def train(train_source_iter: ForeverDataIterator, train_target_iter: ForeverData
         loss_s = F.cross_entropy(y_s, labels_s)  # source域数据的分类误差
 
         # adversarial training to fool the discriminator
-        d = domain_discri(gl(f))  # 梯度反转层
+        d = domain_discri(gl(f))  # 梯度反转层 TODO:这里为什么会加梯度反转层
         d_s, d_t = d.chunk(2, dim=0)
         # 对抗损失
         loss_transfer = 0.5 * (domain_adv(d_s, 'target') + domain_adv(d_t, 'source'))

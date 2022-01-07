@@ -64,15 +64,10 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
 
             # compute output
             output = model(images)
-            sig = False
             for i in range(output.size(0)):
                 if torch.max(output[i]) < confidence:
                     del_tensor_ele(output, i)
                     del_tensor_ele(target, i)
-                else:
-                    sig = True
-            if not sig:
-                return None, None
 
             loss = F.cross_entropy(output, target)
 
@@ -179,17 +174,18 @@ def main(args: argparse.Namespace):
         utils.pretrain(train_source_iter, classifier, optimizer, lr_scheduler, epoch, args, device)
 
         # evaluate on validation set
-        acc1 = []
+        con_acc_dict = {}
         for i in range(len(args.confidence)):
             confidence = args.confidence[i]
-            acc1.append(validate(val_loader, classifier, args, device, confidence))
-        print(acc1)
+            acc = validate(val_loader, classifier, args, device, confidence)
+            con_acc_dict[args.confidence[i]] = acc
+        print(con_acc_dict)
 
         # remember best acc@1 and save checkpoint
         torch.save(classifier.state_dict(), logger.get_checkpoint_path('latest'))
-        if acc1[0] > best_acc1:
+        if con_acc_dict[0] > best_acc1:
             shutil.copy(logger.get_checkpoint_path('latest'), logger.get_checkpoint_path('best'))
-        best_acc1 = max(acc1[0], best_acc1)
+        best_acc1 = max(con_acc_dict[0], best_acc1)
 
     print("best_acc1 = {:3.1f}".format(best_acc1))
 
@@ -204,7 +200,7 @@ def main(args: argparse.Namespace):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Source Only for Unsupervised Domain Adaptation')
     # dataset parameters
-    parser.add_argument('-confidence', nargs='+', type=int, default=[0])
+    parser.add_argument('-confidence', nargs='+', type=int, default=[0, 0.4, 0.5, 0.6, 0.7])
     parser.add_argument('root', metavar='DIR',
                         help='root path of dataset')
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),
