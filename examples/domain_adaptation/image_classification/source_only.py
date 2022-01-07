@@ -59,15 +59,13 @@ def validate(val_loader, model, args, device, confidence=0) -> float:
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
-            print(images.shape)
-            print(target.shape)
 
             # compute output
             output = model(images)
             for i in range(output.size(0)):
                 if torch.max(output[i]) < confidence:
-                    del_tensor_ele(output, i)
-                    del_tensor_ele(target, i)
+                    output = del_tensor_ele(output, i)
+                    target = del_tensor_ele(target, i)
 
             loss = F.cross_entropy(output, target)
 
