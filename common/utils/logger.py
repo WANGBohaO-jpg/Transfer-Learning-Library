@@ -53,7 +53,7 @@ class CompleteLogger:
         self.phase = phase
         self.tensorboard_cnt = 0
         self.tensorboard_directory = os.path.join(self.root, self.model, "tensorboard", str(self.tensorboard_cnt))
-        if os.path.exists(self.tensorboard_directory):
+        while os.path.exists(self.tensorboard_directory):
             self.tensorboard_cnt += 1
         self.visualize_directory = os.path.join(self.root, self.model, "visualize")
         self.checkpoint_directory = os.path.join(self.root, self.model, "checkpoints")
