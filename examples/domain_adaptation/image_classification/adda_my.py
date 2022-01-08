@@ -56,12 +56,12 @@ class feature_CNN(nn.Module):
         self.bottleneck = nn.Sequential(nn.Linear(backbone.out_features, bottleneck_dim),
                                         nn.BatchNorm1d(bottleneck_dim),
                                         nn.ReLU())
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        #     elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+        #         nn.init.constant_(m.weight, 1)
+        #         nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = self.backbone(x)
@@ -127,11 +127,10 @@ def main(args: argparse.Namespace):
     domain_adv_loss = DomainAdversarialLoss().to(device)
 
     # define optimizer and lr scheduler
-    optimizer_head = SGD(classifier_head.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
-                         nesterov=True)
-    optimizer_s_cnn = SGD(
+    optimizer_s_net = SGD(
         [{"params": source_backbone.parameters(), "lr": 0.1 * args.lr if not args.scratch else args.lr},
-         {"params": source_CNN.bottleneck.parameters(), "lr": args.lr}],
+         {"params": source_CNN.bottleneck.parameters(), "lr": args.lr},
+         {"params": classifier_head.parameters(), "lr": args.lr}],
         args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
@@ -139,8 +138,7 @@ def main(args: argparse.Namespace):
                       nesterov=True)  # 领域判别器的优化器
 
     # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子
-    lr_scheduler_head = LambdaLR(optimizer_head, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
-    lr_scheduler_s_cnn = LambdaLR(optimizer_s_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
+    lr_scheduler_s_net = LambdaLR(optimizer_s_net, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_t_cnn = LambdaLR(optimizer_t_cnn, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
     lr_scheduler_d = LambdaLR(optimizer_d, lambda x: args.lr_d * (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
 
@@ -177,15 +175,14 @@ def main(args: argparse.Namespace):
     best_acc1 = 0.
     print("begin to train the source model on the source dataset")
     for epoch in range(args.epochs1):
-        optimizer_list = [optimizer_s_cnn, optimizer_head]
-        lr_scheduler_list = [lr_scheduler_s_cnn, lr_scheduler_head]
-        print("lr source cnn:", lr_scheduler_s_cnn.get_last_lr())
-        print("lr classifier head:", lr_scheduler_head.get_last_lr())
-        train_source(source_CNN, classifier_head, train_source_iter, optimizer_list, lr_scheduler_list, epoch, args,
+        print("lr source cnn:", lr_scheduler_s_net.get_last_lr())
+        train_source(source_CNN, classifier_head, train_source_iter, optimizer_s_net, lr_scheduler_s_net, epoch, args,
                      writer)
-
+        # TODO:貌似这个拼接测试有问题
         temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
+        temp_model.eval()
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+
         writer.add_scalar('Pre_Train/Target/losses', losses_avg, epoch + 1)
         writer.add_scalar('Pre_Train/Target/acc1', acc1, epoch + 1)
 
@@ -199,6 +196,9 @@ def main(args: argparse.Namespace):
 
     # 将target模型的参数初始化为source TODO:可能存在bug
     target_CNN.load_state_dict(source_CNN.state_dict())
+    temp_model = nn.Sequential(target_CNN, classifier_head).to(device).eval()
+    acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
+    print("测试初始化target CNN后的准确率：", acc1_temp)
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
     best_acc1 = 0
@@ -230,15 +230,15 @@ def main(args: argparse.Namespace):
     target_CNN.load_state_dict(torch.load(logger.get_checkpoint_path('target_CNN_best')))
     classifier_head.load_state_dict(torch.load(logger.get_checkpoint_path('classifier_head_best')))
     test_model = nn.Sequential(target_CNN, classifier_head)
-    acc1 = utils.validate(test_loader, test_model, args, device)
+    acc1, _ = utils.validate(test_loader, test_model, args, device)
     print("test_acc1 = {:3.1f}".format(acc1))
 
     logger.close()
     writer.close()
 
 
-def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: ForeverDataIterator, optimizer: List,
-                 lr_scheduler: List, epoch: int, args: argparse.Namespace, writer):
+def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: ForeverDataIterator, optimizer,
+                 lr_scheduler, epoch: int, args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')
     losses_s = AverageMeter('Cls Loss', ':6.2f')
@@ -246,26 +246,22 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
     progress = ProgressMeter(args.iters_per_epoch, [batch_time, data_time, losses_s, cls_accs],
                              prefix="Epoch: [{}]".format(epoch))
     end = time.time()
+    source_cnn.train()
+    head.train()
+    set_requires_grad(source_cnn, True)
+    set_requires_grad(head, True)
     for i in range(args.iters_per_epoch):
         x_s, labels_s = next(train_source_iter)
         x_s, labels_s = x_s.to(device), labels_s.to(device)
         data_time.update(time.time() - end)
 
-        source_cnn.train()
-        head.train()
-        set_requires_grad(source_cnn, True)
-        set_requires_grad(head, True)
-
         y_s = head(source_cnn(x_s))
         loss = F.cross_entropy(y_s, labels_s)
 
-        for j in optimizer:
-            j.zero_grad()
+        optimizer.zero_grad()
         loss.backward()
-        for j in optimizer:
-            j.step()
-        for j in lr_scheduler:
-            j.step()
+        optimizer.step()
+        lr_scheduler.step()
 
         losses_s.update(loss.item(), x_s.size(0))
         cls_accs.update(accuracy(y_s, labels_s)[0].item(), x_s.size(0))
@@ -293,70 +289,60 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
                              prefix="Epoch: [{}]".format(epoch))
     set_requires_grad(source_cnn, False)
     source_cnn.eval()
-
     end = time.time()
+
     for i in range(args.iters_per_epoch):
         # 更新判别器
+        x_s, labels_s = next(train_source_iter)
+        x_t, _ = next(train_target_iter)
+        x_s = x_s.to(device)
+        x_t = x_t.to(device)
+        data_time.update(time.time() - end)
+
         target_cnn.eval()
         domain_discri.train()
         set_requires_grad(target_cnn, False)
         set_requires_grad(domain_discri, True)
-        for j in range(args.k1):
-            x_s, labels_s = next(train_source_iter)
-            x_t, _ = next(train_target_iter)
-            x_s = x_s.to(device)
-            x_t = x_t.to(device)
-            data_time.update(time.time() - end)
 
-            target_cnn.eval()
-            domain_discri.train()
-            set_requires_grad(target_cnn, False)
-            set_requires_grad(domain_discri, True)
+        f_s = source_cnn(x_s)
+        f_s = f_s.detach()  # 防止梯度传播到source CNN上
+        f_t = target_cnn(x_t)
+        f = torch.cat((f_s, f_t), dim=0)
+        d = domain_discri(f)
+        d_s, d_t = d.chunk(2, dim=0)
+        loss_dis = 0.5 * (domain_adv(d_s, 'source') + domain_adv(d_t, 'target'))
 
-            f_s = source_cnn(x_s)
-            f_t = target_cnn(x_t)
-            f = torch.cat((f_s, f_t), dim=0)
-            d = domain_discri(f)
-            d_s, d_t = d.chunk(2, dim=0)
-            loss_dis = 0.5 * (domain_adv(d_s, 'source') + domain_adv(d_t, 'target'))
+        optimizer[1].zero_grad()
+        loss_dis.backward()
+        optimizer[1].step()
+        lr_sceduler[1].step()
 
-            optimizer[1].zero_grad()
-            loss_dis.backward()
-            optimizer[1].step()
-            lr_sceduler[1].step()
-
-            domain_acc = 0.5 * (
-                        binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
-            domain_accs.update(domain_acc.item(), x_s.size(0))
-            discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
+        domain_acc = 0.5 * (
+                binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+        domain_accs.update(domain_acc.item(), x_s.size(0))
+        discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
 
         # 更新Target CNN
         target_cnn.train()
         domain_discri.eval()
         set_requires_grad(target_cnn, True)
         set_requires_grad(domain_discri, False)
-        for j in range(args.k2):
-            x_s, labels_s = next(train_source_iter)
-            x_t, _ = next(train_target_iter)
-            x_s = x_s.to(device)
-            x_t = x_t.to(device)
-            data_time.update(time.time() - end)
+        x_s, labels_s = next(train_source_iter)
+        x_t, _ = next(train_target_iter)
+        x_s = x_s.to(device)
+        x_t = x_t.to(device)
+        data_time.update(time.time() - end)
 
-            target_cnn.train()
-            domain_discri.eval()
-            set_requires_grad(target_cnn, True)
-            set_requires_grad(domain_discri, False)
+        f = target_cnn(x_t)
+        d = domain_discri(f)
+        loss_cnn = domain_adv(d, 'source')
 
-            f = target_cnn(x_t)
-            d = domain_discri(f)
-            loss_cnn = domain_adv(d, 'source')
+        optimizer[0].zero_grad()
+        loss_cnn.backward()
+        optimizer[0].step()
+        lr_sceduler[0].step()
 
-            optimizer[0].zero_grad()
-            loss_cnn.backward()
-            optimizer[0].step()
-            lr_sceduler[0].step()
-
-            target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
+        target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -372,8 +358,6 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ADDA for Unsupervised Domain Adaptation')
     # dataset parameters
-    parser.add_argument('-k1', type=int, default=1)
-    parser.add_argument('-k2', type=int, default=10)
     parser.add_argument('root', metavar='DIR',
                         help='root path of dataset')
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),
