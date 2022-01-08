@@ -178,7 +178,6 @@ def main(args: argparse.Namespace):
         print("lr source cnn:", lr_scheduler_s_net.get_last_lr())
         train_source(source_CNN, classifier_head, train_source_iter, optimizer_s_net, lr_scheduler_s_net, epoch, args,
                      writer)
-        # TODO:貌似这个拼接测试有问题
         temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
         temp_model.eval()
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
@@ -194,7 +193,7 @@ def main(args: argparse.Namespace):
                         logger.get_checkpoint_path('classifier_head_best'))
         best_acc1 = max(acc1, best_acc1)
 
-    # 将target模型的参数初始化为source TODO:可能存在bug
+    # 将target模型的参数初始化为source
     target_CNN.load_state_dict(source_CNN.state_dict())
     temp_model = nn.Sequential(target_CNN, classifier_head).to(device).eval()
     acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
@@ -317,32 +316,32 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
         optimizer[1].step()
         lr_sceduler[1].step()
 
-        domain_acc = 0.5 * (
-                binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+        domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
         domain_accs.update(domain_acc.item(), x_s.size(0))
         discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
 
         # 更新Target CNN
-        target_cnn.train()
-        domain_discri.eval()
-        set_requires_grad(target_cnn, True)
-        set_requires_grad(domain_discri, False)
-        x_s, labels_s = next(train_source_iter)
-        x_t, _ = next(train_target_iter)
-        x_s = x_s.to(device)
-        x_t = x_t.to(device)
-        data_time.update(time.time() - end)
+        for i in range(10):
+            target_cnn.train()
+            domain_discri.eval()
+            set_requires_grad(target_cnn, True)
+            set_requires_grad(domain_discri, False)
+            x_s, labels_s = next(train_source_iter)
+            x_t, _ = next(train_target_iter)
+            x_s = x_s.to(device)
+            x_t = x_t.to(device)
+            data_time.update(time.time() - end)
 
-        f = target_cnn(x_t)
-        d = domain_discri(f)
-        loss_cnn = domain_adv(d, 'source')
+            f = target_cnn(x_t)
+            d = domain_discri(f)
+            loss_cnn = domain_adv(d, 'source')
 
-        optimizer[0].zero_grad()
-        loss_cnn.backward()
-        optimizer[0].step()
-        lr_sceduler[0].step()
+            optimizer[0].zero_grad()
+            loss_cnn.backward()
+            optimizer[0].step()
+            lr_sceduler[0].step()
 
-        target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
+            target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -406,7 +405,7 @@ if __name__ == '__main__':
                         dest='weight_decay')
     parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs1', default=20, type=int, metavar='N',
+    parser.add_argument('--epochs1', default=5, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('--epochs2', default=20, type=int, metavar='N',
                         help='number of total epochs to run')
