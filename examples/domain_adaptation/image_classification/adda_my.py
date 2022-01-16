@@ -197,8 +197,8 @@ def main(args: argparse.Namespace):
                             logger.get_checkpoint_path('classifier_head_best'))
                 shutil.copy(logger.get_checkpoint_path('source_CNN_latest'),
                             logger.get_checkpoint_path('source_CNN_pre'))
-                shutil.copy(logger.get_checkpoint_path('source_classifier_latest'),
-                            logger.get_checkpoint_path('source_classifier_pre'))
+                shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
+                            logger.get_checkpoint_path('classifier_head_pre'))
             best_acc1 = max(acc1, best_acc1)
 
         # 将target模型的参数初始化为source
@@ -211,7 +211,7 @@ def main(args: argparse.Namespace):
         checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_pre'))
         source_CNN.load_state_dict(checkpoint)
         target_CNN.load_state_dict(checkpoint)
-        checkpoint = torch.load(logger.get_checkpoint_path('source_classifier_pre'))
+        checkpoint = torch.load(logger.get_checkpoint_path('classifier_head_pre'))
         classifier_head.load_state_dict(checkpoint)
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
