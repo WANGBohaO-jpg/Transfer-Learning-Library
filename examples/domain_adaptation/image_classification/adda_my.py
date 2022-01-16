@@ -342,10 +342,10 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             domain_discri.eval()
             set_requires_grad(target_cnn, True)
             set_requires_grad(domain_discri, False)
-            x_s, labels_s = next(train_source_iter)
-            x_t, _ = next(train_target_iter)
-            x_s = x_s.to(device)
-            x_t = x_t.to(device)
+            # x_s, labels_s = next(train_source_iter)
+            # x_t, _ = next(train_target_iter)
+            # x_s = x_s.to(device)
+            # x_t = x_t.to(device)
             data_time.update(time.time() - end)
 
             f = target_cnn(x_t)
@@ -359,8 +359,8 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 
             target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
 
-        batch_time.update(time.time() - end)
-        end = time.time()
+            batch_time.update(time.time() - end)
+            end = time.time()
 
         if i % args.print_freq == 0:
             progress.display(i)
