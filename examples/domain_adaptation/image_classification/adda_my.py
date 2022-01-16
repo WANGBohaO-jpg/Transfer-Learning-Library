@@ -174,7 +174,8 @@ def main(args: argparse.Namespace):
         return
 
     # 将source encoder和head在source上训练
-    if not args.adversarial or not os.path.exists(logger.get_checkpoint_path('source_CNN_pre')):
+    if not args.adversarial or not os.path.exists(logger.get_checkpoint_path('source_CNN_pre')) \
+            or not os.path.exists(logger.get_checkpoint_path('classifier_head_pre')):
         best_acc1 = 0.
         print("begin to train the source model on the source dataset")
         for epoch in range(args.epochs1):
