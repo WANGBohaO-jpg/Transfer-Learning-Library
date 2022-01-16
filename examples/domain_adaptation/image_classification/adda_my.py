@@ -196,10 +196,6 @@ def main(args: argparse.Namespace):
                             logger.get_checkpoint_path('source_CNN_best'))
                 shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
                             logger.get_checkpoint_path('classifier_head_best'))
-                shutil.copy(logger.get_checkpoint_path('source_CNN_latest'),
-                            logger.get_checkpoint_path('source_CNN_pre'))
-                shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
-                            logger.get_checkpoint_path('classifier_head_pre'))
             best_acc1 = max(acc1, best_acc1)
 
         # 将target模型的参数初始化为source
@@ -209,10 +205,10 @@ def main(args: argparse.Namespace):
         acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
         print("测试初始化target CNN后的准确率：", acc1_temp)
     else:
-        checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_pre'))
+        checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_best'))
         source_CNN.load_state_dict(checkpoint)
         target_CNN.load_state_dict(checkpoint)
-        checkpoint = torch.load(logger.get_checkpoint_path('classifier_head_pre'))
+        checkpoint = torch.load(logger.get_checkpoint_path('classifier_head_best'))
         classifier_head.load_state_dict(checkpoint)
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
