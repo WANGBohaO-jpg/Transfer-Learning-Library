@@ -7,6 +7,8 @@ of the feature extractor. We achieve promising results on digits datasets (repor
 But on other benchmarks, ADDA-grl may achieve better results.
 """
 # TODO：本代码复现内容和原文有几处不符合
+import os.path
+
 """
 没有将source和target的encoder独立分开，
 loss优化方法没有采用GAN，而是采用梯度反转
@@ -172,32 +174,45 @@ def main(args: argparse.Namespace):
         return
 
     # 将source encoder和head在source上训练
-    best_acc1 = 0.
-    print("begin to train the source model on the source dataset")
-    for epoch in range(args.epochs1):
-        print("lr source cnn:", lr_scheduler_s_net.get_last_lr())
-        train_source(source_CNN, classifier_head, train_source_iter, optimizer_s_net, lr_scheduler_s_net, epoch, args,
-                     writer)
-        temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
-        temp_model.eval()
-        acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+    if not args.adversarial or not os.path.exists(logger.get_checkpoint_path('source_CNN_pre')):
+        best_acc1 = 0.
+        print("begin to train the source model on the source dataset")
+        for epoch in range(args.epochs1):
+            print("lr source cnn:", lr_scheduler_s_net.get_last_lr())
+            train_source(source_CNN, classifier_head, train_source_iter, optimizer_s_net, lr_scheduler_s_net, epoch,
+                         args, writer)
+            temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
+            temp_model.eval()
+            acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
 
-        writer.add_scalar('Pre_Train/Target/losses', losses_avg, epoch + 1)
-        writer.add_scalar('Pre_Train/Target/acc1', acc1, epoch + 1)
+            writer.add_scalar('Pre_Train/Target/losses', losses_avg, epoch + 1)
+            writer.add_scalar('Pre_Train/Target/acc1', acc1, epoch + 1)
 
-        torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
-        torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
-        if acc1 > best_acc1:
-            shutil.copy(logger.get_checkpoint_path('source_CNN_latest'), logger.get_checkpoint_path('source_CNN_best'))
-            shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
-                        logger.get_checkpoint_path('classifier_head_best'))
-        best_acc1 = max(acc1, best_acc1)
+            torch.save(source_CNN.state_dict(), logger.get_checkpoint_path('source_CNN_latest'))
+            torch.save(classifier_head.state_dict(), logger.get_checkpoint_path('classifier_head_latest'))
+            if acc1 > best_acc1:
+                shutil.copy(logger.get_checkpoint_path('source_CNN_latest'),
+                            logger.get_checkpoint_path('source_CNN_best'))
+                shutil.copy(logger.get_checkpoint_path('classifier_head_latest'),
+                            logger.get_checkpoint_path('classifier_head_best'))
+                shutil.copy(logger.get_checkpoint_path('source_CNN_latest'),
+                            logger.get_checkpoint_path('source_CNN_pre'))
+                shutil.copy(logger.get_checkpoint_path('source_classifier_latest'),
+                            logger.get_checkpoint_path('source_classifier_pre'))
+            best_acc1 = max(acc1, best_acc1)
 
-    # 将target模型的参数初始化为source
-    target_CNN.load_state_dict(source_CNN.state_dict())
-    temp_model = nn.Sequential(target_CNN, classifier_head).to(device).eval()
-    acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
-    print("测试初始化target CNN后的准确率：", acc1_temp)
+        # 将target模型的参数初始化为source
+        target_CNN.load_state_dict(source_CNN.state_dict())
+
+        temp_model = nn.Sequential(target_CNN, classifier_head).to(device).eval()
+        acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
+        print("测试初始化target CNN后的准确率：", acc1_temp)
+    else:
+        checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_pre'))
+        source_CNN.load_state_dict(checkpoint)
+        target_CNN.load_state_dict(checkpoint)
+        checkpoint = torch.load(logger.get_checkpoint_path('source_classifier_pre'))
+        classifier_head.load_state_dict(checkpoint)
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
     best_acc1 = 0
@@ -321,7 +336,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
         discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
 
         # 更新Target CNN
-        for i in range(10):
+        for j in range(10):
             target_cnn.train()
             domain_discri.eval()
             set_requires_grad(target_cnn, True)
@@ -357,6 +372,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ADDA for Unsupervised Domain Adaptation')
     # dataset parameters
+    parser.add_argument('--adversarial', type=bool, default=True)
     parser.add_argument('root', metavar='DIR',
                         help='root path of dataset')
     parser.add_argument('-d', '--data', metavar='DATA', default='Office31', choices=utils.get_dataset_names(),
