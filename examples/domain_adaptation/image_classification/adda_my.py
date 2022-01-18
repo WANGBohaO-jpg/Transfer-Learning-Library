@@ -174,8 +174,7 @@ def main(args: argparse.Namespace):
         return
 
     # 将source encoder和head在source上训练
-    if not args.adversarial or not os.path.exists(logger.get_checkpoint_path('source_CNN_pre')) \
-            or not os.path.exists(logger.get_checkpoint_path('classifier_head_pre')):
+    if not args.adversarial or not os.path.exists(logger.get_checkpoint_path('source_CNN_best')):
         best_acc1 = 0.
         print("begin to train the source model on the source dataset")
         for epoch in range(args.epochs1):
@@ -185,6 +184,7 @@ def main(args: argparse.Namespace):
             temp_model = nn.Sequential(source_CNN, classifier_head).to(device)
             temp_model.eval()
             acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+            print("AccTop1 on val_loader: {}".format(acc1))
 
             writer.add_scalar('Pre_Train/Target/losses', losses_avg, epoch + 1)
             writer.add_scalar('Pre_Train/Target/acc1', acc1, epoch + 1)
@@ -205,6 +205,7 @@ def main(args: argparse.Namespace):
         acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
         print("测试初始化target CNN后的准确率：", acc1_temp)
     else:
+        print("==skip the pretrain phase==")
         checkpoint = torch.load(logger.get_checkpoint_path('source_CNN_best'))
         source_CNN.load_state_dict(checkpoint)
         target_CNN.load_state_dict(checkpoint)
@@ -225,9 +226,11 @@ def main(args: argparse.Namespace):
         # 拼接模型，做测试
         temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
+        print("AccTop1 on val_loader: {}".format(acc1))
         writer.add_scalar('Adversarial/Target/acc1', acc1, epoch + 1)
         writer.add_scalar('Adversarial/Target/losses_avg', losses_avg, epoch + 1)
         acc1, losses_avg = utils.validate(train_source_loader, temp_model, args, device)
+        print("AccTop1 on source_loader: {}".format(acc1))
         writer.add_scalar('Adversarial/Source/losses_avg', losses_avg, epoch + 1)
         writer.add_scalar('Adversarial/Source/acc1', acc1, epoch + 1)
 
@@ -290,7 +293,7 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
                       train_target_iter: ForeverDataIterator, optimizer: List, lr_sceduler: List, epoch: int,
                       args: argparse.Namespace, writer):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
-    data_time = AverageMeter('Data', ':5.2f')  # 处理
+    data_time = AverageMeter('Data', ':5.2f')
     domain_accs = AverageMeter('Domain AccTop1', ':3.1f')
     target_cnn_domain_loss = AverageMeter('Target_CNN DomainLoss', ':6.2f')
     discriminator_domain_loss = AverageMeter('Discriminator DomainLoss', ':6.2f')
@@ -328,22 +331,12 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
         optimizer[1].step()
         lr_sceduler[1].step()
 
-        domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
-        domain_accs.update(domain_acc.item(), x_s.size(0))
-        discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
-
         # 更新Target CNN
-        for j in range(10):
-            target_cnn.train()
-            domain_discri.eval()
-            set_requires_grad(target_cnn, True)
-            set_requires_grad(domain_discri, False)
-            # x_s, labels_s = next(train_source_iter)
-            # x_t, _ = next(train_target_iter)
-            # x_s = x_s.to(device)
-            # x_t = x_t.to(device)
-            data_time.update(time.time() - end)
-
+        target_cnn.train()
+        domain_discri.eval()
+        set_requires_grad(target_cnn, True)
+        set_requires_grad(domain_discri, False)
+        for j in range(1):
             f = target_cnn(x_t)
             d = domain_discri(f)
             loss_cnn = domain_adv(d, 'source')
@@ -355,11 +348,22 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
 
             target_cnn_domain_loss.update(loss_cnn.item(), x_s.size(0))
 
-            batch_time.update(time.time() - end)
-            end = time.time()
+        with torch.no_grad():
+            f_s = source_cnn(x_s)
+            f_t = target_cnn(x_t)
+            f = torch.cat((f_s, f_t), dim=0)
+            d = domain_discri(f)
+            d_s, d_t = d.chunk(2, dim=0)
+            loss_dis = 0.5 * (domain_adv(d_s, 'source') + domain_adv(d_t, 'target'))
+            domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
+            domain_accs.update(domain_acc.item(), x_s.size(0))
+            discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
 
         if i % args.print_freq == 0:
             progress.display(i)
+
+        batch_time.update(time.time() - end)
+        end = time.time()
 
     writer.add_scalar('Adversarial/Adv/target_cnn_domain_loss', target_cnn_domain_loss.avg, epoch + 1)
     writer.add_scalar('Adversarial/Adv/discriminator_domain_loss', discriminator_domain_loss.avg, epoch + 1)
