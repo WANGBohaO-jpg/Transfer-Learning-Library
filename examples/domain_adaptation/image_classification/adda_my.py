@@ -136,8 +136,9 @@ def main(args: argparse.Namespace):
         args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     optimizer_t_cnn = SGD(target_CNN.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay,
                           nesterov=True)
+    # 领域判别器的优化器 get_parameter函数当中指定了判别器的学习率为1，因此scheduler的写法前面加了个args.lr_d
     optimizer_d = SGD(domain_discri.get_parameters(), args.lr_d, momentum=args.momentum, weight_decay=args.weight_decay,
-                      nesterov=True)  # 领域判别器的优化器
+                      nesterov=True)
 
     # LambdaLR是用来自定义学习率调整策略的，会将参数的原始学习率乘上一个因子
     lr_scheduler_s_net = LambdaLR(optimizer_s_net, lambda x: (1. + args.lr_gamma * float(x)) ** (-args.lr_decay))
@@ -213,7 +214,7 @@ def main(args: argparse.Namespace):
         classifier_head.load_state_dict(checkpoint)
 
     # 改为target_CNN和source_classifier的feature提取层对抗训练
-    best_acc1 = 0
+    best_acc1 = 0.
     print("begin to train the target CNN and source CNN using adversarial manner")
     for epoch in range(args.epochs2):
         optimizer_list = [optimizer_t_cnn, optimizer_d]
@@ -222,7 +223,8 @@ def main(args: argparse.Namespace):
         print("lr discriminator:", lr_scheduler_d.get_last_lr())
 
         train_adversarial(source_CNN, target_CNN, domain_discri, domain_adv_loss, train_source_iter,
-                          train_target_iter, optimizer_list, lr_scheduler_list, epoch, args, writer)
+                          train_target_iter, optimizer_list, lr_scheduler_list, epoch, args, writer, classifier_head,
+                          val_loader)
         # 拼接模型，做测试
         temp_model = nn.Sequential(target_CNN, classifier_head).to(device)
         acc1, losses_avg = utils.validate(val_loader, temp_model, args, device)
@@ -291,7 +293,7 @@ def train_source(source_cnn: nn.Module, head: nn.Module, train_source_iter: Fore
 def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discri: DomainDiscriminator,
                       domain_adv: DomainAdversarialLoss, train_source_iter: ForeverDataIterator,
                       train_target_iter: ForeverDataIterator, optimizer: List, lr_sceduler: List, epoch: int,
-                      args: argparse.Namespace, writer):
+                      args: argparse.Namespace, writer, classifier_head, val_loader):
     batch_time = AverageMeter('Time', ':5.2f')  # 对AverageMeter直接使用str()返回该指标的信息
     data_time = AverageMeter('Data', ':5.2f')
     domain_accs = AverageMeter('Domain AccTop1', ':3.1f')
@@ -304,6 +306,11 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
     set_requires_grad(source_cnn, False)
     source_cnn.eval()
     end = time.time()
+
+    temp_model = nn.Sequential(target_cnn, classifier_head).to(device).eval()
+    acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
+    print("调整前target CNN的准确率：", acc1_temp)
+    cnt = 0
 
     for i in range(args.iters_per_epoch):
         # 更新判别器
@@ -358,10 +365,16 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
             domain_acc = 0.5 * (binary_accuracy(d_s, torch.ones_like(d_s)) + binary_accuracy(d_t, torch.zeros_like(d_t)))
             domain_accs.update(domain_acc.item(), x_s.size(0))
             discriminator_domain_loss.update(loss_dis.item(), x_s.size(0))
+            # print("第{}次调整后的判别器acc：".format(cnt), domain_acc)
 
         if i % args.print_freq == 0:
             progress.display(i)
 
+        cnt += 1
+        temp_model = nn.Sequential(target_cnn, classifier_head).to(device).eval()
+        acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
+        print("第{}次调整target CNN的准确率：".format(cnt), acc1_temp)
+        
         batch_time.update(time.time() - end)
         end = time.time()
 

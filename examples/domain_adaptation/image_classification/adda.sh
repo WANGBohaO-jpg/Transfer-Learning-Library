@@ -11,7 +11,7 @@ CUDA_VISIBLE_DEVICES=3 nohup python adda.py data/office31 -d Office31 -s A -t D 
 CUDA_VISIBLE_DEVICES=4 nohup python adda.py data/office31 -d Office31 -s D -t A -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_D2A &
 CUDA_VISIBLE_DEVICES=5 nohup python adda.py data/office31 -d Office31 -s W -t A -a resnet50 --epochs 20 --seed 1 --log logs/adda/Office31_W2A &
 # adda_my
-CUDA_VISIBLE_DEVICES=0 python adda_my.py data/office31 -d Office31 -s A -t W -a resnet50 --epochs1 20 --epochs2 20 --seed 1 --log logs/adda_my/Office31_A2W
+CUDA_VISIBLE_DEVICES=5 python adda_my.py data/office31 -d Office31 -s W -t D -a resnet50 --epochs1 20 --epochs2 20 --seed 1 --log logs/adda_my/Office31_W2D
 
 CUDA_VISIBLE_DEVICES=5 nohup python adda_my.py data/office31 -d Office31 -s A -t W -a resnet50 --epochs1 10 --epochs2 20 --seed 1 --log logs/adda_my/Office31_A2W &
 CUDA_VISIBLE_DEVICES=6 nohup python adda_my.py data/office31 -d Office31 -s D -t W -a resnet50 --epochs1 10 --epochs2 20 --seed 1 --log logs/adda_my/Office31_D2W &
