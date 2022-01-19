@@ -373,8 +373,8 @@ def train_adversarial(source_cnn: nn.Module, target_cnn: nn.Module, domain_discr
         cnt += 1
         temp_model = nn.Sequential(target_cnn, classifier_head).to(device).eval()
         acc1_temp, _ = utils.validate(val_loader, temp_model, args, device)
-        print("第{}次调整target CNN的准确率：".format(cnt), acc1_temp)
-        
+        print("第{}个batch优化后target CNN的准确率：".format(cnt), acc1_temp)
+
         batch_time.update(time.time() - end)
         end = time.time()
 
